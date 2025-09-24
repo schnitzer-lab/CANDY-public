@@ -1,0 +1,36 @@
+09/24/2025 02:12:46 PM - CANDY Logger - INFO - Epoch 0, TRAIN
+1_step_mse: 0.16177
+2_steps_mse: 0.16602
+3_steps_mse: 0.17060
+4_steps_mse: 0.17545
+reg_loss: 0.22265, scale_l2: 0.00500
+contrastive_loss: 7.02464, contrastive_scale: 0.10000
+model_loss: 0.67384, total_loss: 0.89649
+
+09/24/2025 02:14:01 PM - CANDY Logger - INFO - Epoch 0, VALID
+1_step_mse: 0.15480
+2_steps_mse: 0.15866
+3_steps_mse: 0.16288
+4_steps_mse: 0.16735
+reg_loss: 0.21944, scale_l2: 0.00500
+contrastive_loss: 6.67954, contrastive_scale: 0.10000
+model_loss: 0.64370, total_loss: 0.86314
+
+09/24/2025 02:22:01 PM - CANDY Logger - INFO - Epoch 1, TRAIN
+1_step_mse: 0.14370
+2_steps_mse: 0.14754
+3_steps_mse: 0.15169
+4_steps_mse: 0.15609
+reg_loss: 0.21793, scale_l2: 0.00500
+contrastive_loss: 6.68235, contrastive_scale: 0.10000
+model_loss: 0.59902, total_loss: 0.81695
+
+09/24/2025 02:23:10 PM - CANDY Logger - INFO - Epoch 1, VALID
+1_step_mse: 0.13558
+2_steps_mse: 0.13908
+3_steps_mse: 0.14290
+4_steps_mse: 0.14695
+reg_loss: 0.21487, scale_l2: 0.00500
+contrastive_loss: 6.64006, contrastive_scale: 0.10000
+model_loss: 0.56450, total_loss: 0.77938
+

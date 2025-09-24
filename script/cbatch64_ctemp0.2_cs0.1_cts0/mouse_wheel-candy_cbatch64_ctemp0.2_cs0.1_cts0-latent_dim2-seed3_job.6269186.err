@@ -1,0 +1,39 @@
+09/24/2025 02:13:46 PM - CANDY Logger - WARNING - Optimizer and LR scheduler can be loaded only in resume_train mode, else they are re-initialized
+09/24/2025 02:13:46 PM - CANDY Logger - INFO - Loading model from: ../results/cbatch64_ctemp0.2_cs0.1_cts0_behvOFF/str/CANDY-latent_dim2-seed3-contrastiveTrue-supbevFalse-batch32-cbatch64/frac_1.0/ckpts/1_ckpt.pth...
+09/24/2025 02:13:46 PM - CANDY Logger - INFO - Checkpoint succesfully loaded from ../results/cbatch64_ctemp0.2_cs0.1_cts0_behvOFF/str/CANDY-latent_dim2-seed3-contrastiveTrue-supbevFalse-batch32-cbatch64/frac_1.0/ckpts/1_ckpt.pth!
+09/24/2025 02:39:50 PM - CANDY Logger - INFO - Epoch 10, TRAIN
+1_step_mse: 0.02002
+2_steps_mse: 0.01968
+3_steps_mse: 0.01934
+4_steps_mse: 0.01904
+reg_loss: 0.17446, scale_l2: 0.00500
+contrastive_loss: 6.57687, contrastive_scale: 0.10000
+model_loss: 0.07808, total_loss: 0.25254
+
+09/24/2025 02:40:09 PM - CANDY Logger - INFO - Epoch 10, VALID
+1_step_mse: 0.02205
+2_steps_mse: 0.02176
+3_steps_mse: 0.02145
+4_steps_mse: 0.02120
+reg_loss: 0.17254, scale_l2: 0.00500
+contrastive_loss: 6.56741, contrastive_scale: 0.10000
+model_loss: 0.08646, total_loss: 0.25900
+
+09/24/2025 03:11:11 PM - CANDY Logger - INFO - Epoch 20, TRAIN
+1_step_mse: 0.01844
+2_steps_mse: 0.01798
+3_steps_mse: 0.01750
+4_steps_mse: 0.01707
+reg_loss: 0.15123, scale_l2: 0.00500
+contrastive_loss: 6.48925, contrastive_scale: 0.10000
+model_loss: 0.07100, total_loss: 0.22223
+
+09/24/2025 03:11:40 PM - CANDY Logger - INFO - Epoch 20, VALID
+1_step_mse: 0.02062
+2_steps_mse: 0.02029
+3_steps_mse: 0.01995
+4_steps_mse: 0.01965
+reg_loss: 0.15004, scale_l2: 0.00500
+contrastive_loss: 6.51435, contrastive_scale: 0.10000
+model_loss: 0.08051, total_loss: 0.23054
+

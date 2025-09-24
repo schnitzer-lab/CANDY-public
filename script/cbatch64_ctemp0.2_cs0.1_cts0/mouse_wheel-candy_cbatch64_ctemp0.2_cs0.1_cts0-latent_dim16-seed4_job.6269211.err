@@ -1,0 +1,91 @@
+09/24/2025 02:14:48 PM - CANDY Logger - INFO - Epoch 0, TRAIN
+1_step_mse: 0.16044
+2_steps_mse: 0.16465
+3_steps_mse: 0.16919
+4_steps_mse: 0.17400
+reg_loss: 0.23218, scale_l2: 0.00500
+contrastive_loss: 7.72177, contrastive_scale: 0.10000
+model_loss: 0.66829, total_loss: 0.90047
+
+09/24/2025 02:14:58 PM - CANDY Logger - INFO - Epoch 0, VALID
+1_step_mse: 0.15426
+2_steps_mse: 0.15812
+3_steps_mse: 0.16232
+4_steps_mse: 0.16679
+reg_loss: 0.22901, scale_l2: 0.00500
+contrastive_loss: 6.91823, contrastive_scale: 0.10000
+model_loss: 0.64148, total_loss: 0.87049
+
+09/24/2025 02:16:08 PM - CANDY Logger - INFO - Epoch 1, TRAIN
+1_step_mse: 0.14379
+2_steps_mse: 0.14768
+3_steps_mse: 0.15187
+4_steps_mse: 0.15631
+reg_loss: 0.22753, scale_l2: 0.00500
+contrastive_loss: 6.84034, contrastive_scale: 0.10000
+model_loss: 0.59965, total_loss: 0.82718
+
+09/24/2025 02:16:19 PM - CANDY Logger - INFO - Epoch 1, VALID
+1_step_mse: 0.13624
+2_steps_mse: 0.13976
+3_steps_mse: 0.14359
+4_steps_mse: 0.14767
+reg_loss: 0.22454, scale_l2: 0.00500
+contrastive_loss: 6.74671, contrastive_scale: 0.10000
+model_loss: 0.56725, total_loss: 0.79180
+
+09/24/2025 02:28:56 PM - CANDY Logger - INFO - Epoch 10, TRAIN
+1_step_mse: 0.02106
+2_steps_mse: 0.02064
+3_steps_mse: 0.02023
+4_steps_mse: 0.01986
+reg_loss: 0.19449, scale_l2: 0.00500
+contrastive_loss: 6.53575, contrastive_scale: 0.10000
+model_loss: 0.08179, total_loss: 0.27627
+
+09/24/2025 02:29:08 PM - CANDY Logger - INFO - Epoch 10, VALID
+1_step_mse: 0.02216
+2_steps_mse: 0.02202
+3_steps_mse: 0.02187
+4_steps_mse: 0.02179
+reg_loss: 0.19206, scale_l2: 0.00500
+contrastive_loss: 6.52879, contrastive_scale: 0.10000
+model_loss: 0.08784, total_loss: 0.27990
+
+09/24/2025 02:43:35 PM - CANDY Logger - INFO - Epoch 20, TRAIN
+1_step_mse: 0.01832
+2_steps_mse: 0.01792
+3_steps_mse: 0.01753
+4_steps_mse: 0.01717
+reg_loss: 0.16660, scale_l2: 0.00500
+contrastive_loss: 6.43599, contrastive_scale: 0.10000
+model_loss: 0.07093, total_loss: 0.23753
+
+09/24/2025 02:43:48 PM - CANDY Logger - INFO - Epoch 20, VALID
+1_step_mse: 0.02065
+2_steps_mse: 0.02033
+3_steps_mse: 0.02000
+4_steps_mse: 0.01972
+reg_loss: 0.16514, scale_l2: 0.00500
+contrastive_loss: 6.47441, contrastive_scale: 0.10000
+model_loss: 0.08070, total_loss: 0.24584
+
+09/24/2025 02:58:08 PM - CANDY Logger - INFO - Epoch 30, TRAIN
+1_step_mse: 0.01825
+2_steps_mse: 0.01780
+3_steps_mse: 0.01734
+4_steps_mse: 0.01692
+reg_loss: 0.14731, scale_l2: 0.00500
+contrastive_loss: 6.36761, contrastive_scale: 0.10000
+model_loss: 0.07032, total_loss: 0.21762
+
+09/24/2025 02:58:21 PM - CANDY Logger - INFO - Epoch 30, VALID
+1_step_mse: 0.02042
+2_steps_mse: 0.02012
+3_steps_mse: 0.01981
+4_steps_mse: 0.01955
+reg_loss: 0.14628, scale_l2: 0.00500
+contrastive_loss: 6.38794, contrastive_scale: 0.10000
+model_loss: 0.07991, total_loss: 0.22619
+
+slurmstepd: error: *** JOB 6269211 ON sh04-14n14 CANCELLED AT 2025-09-24T15:04:47 DUE TO PREEMPTION ***

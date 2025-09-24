@@ -1704,11 +1704,7 @@ class LDM(nn.Module):
 
             # Project system uncertainty into measurement space, get Kalman Gain
             S = C_t @ Lambda_pred @ torch.permute(C_t, (0, 2, 1)) + R # num_seq, dim_a, dim_a)
-            try:
-                # S_inv = torch.inverse(S) # num_seq, dim_a, dim_a)
-                S_inv = torch.linalg.solve(S, torch.eye(S.size(-1), device=S.device)) # num_seq, dim_a, dim_a)
-            except torch.linalg.LinAlgError as e:
-                S_inv = robust_psd_inverse(S)
+            S_inv = robust_psd_inverse(S)
             K = Lambda_pred @ torch.permute(C_t, (0, 2, 1)) @ S_inv # (num_seq, dim_x, dim_a)
             K = torch.mul(K, mask[:, t, ...].unsqueeze(dim=1))  # (num_seq, dim_x, dim_a) x (num_seq, 1,  1)
 

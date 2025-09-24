@@ -1,0 +1,18 @@
+09/24/2025 03:27:03 PM - CANDY Logger - INFO - Epoch 0, TRAIN
+1_step_mse: 0.16362
+2_steps_mse: 0.16789
+3_steps_mse: 0.17250
+4_steps_mse: 0.17739
+reg_loss: 0.25054, scale_l2: 0.00500
+contrastive_loss: 10.06790, contrastive_scale: 0.10000
+model_loss: 0.68140, total_loss: 0.93194
+
+09/24/2025 03:27:26 PM - CANDY Logger - INFO - Epoch 0, VALID
+1_step_mse: 0.15727
+2_steps_mse: 0.16118
+3_steps_mse: 0.16545
+4_steps_mse: 0.16997
+reg_loss: 0.24703, scale_l2: 0.00500
+contrastive_loss: 8.37979, contrastive_scale: 0.10000
+model_loss: 0.65387, total_loss: 0.90090
+
