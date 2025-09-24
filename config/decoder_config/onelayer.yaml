@@ -1,0 +1,12 @@
+decoder:
+  activation_mapper: leakyrelu
+  hidden_layer_list_mapper: []
+  kernal_initializer: xavier_normal
+  normalizor: null
+  device: cpu
+  lr: !!float 2.0e-4
+  num_epochs: 2000
+  seed: 1
+
+decoder_train:
+  seed: 1

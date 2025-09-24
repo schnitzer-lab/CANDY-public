@@ -1,0 +1,16 @@
+decoder:
+  normalize: false
+  tol: !!float 1.0e-4
+  decoder_type: lasso
+
+decoder_train:
+  params_grid:
+    alpha:
+      start: !!float 1.0e-5
+      stop: 10
+      step: 0.1
+  scoring: neg_mean_squared_error
+  n_split: 10
+  n_repeats: 3
+  seed: 1
+  train_together: false

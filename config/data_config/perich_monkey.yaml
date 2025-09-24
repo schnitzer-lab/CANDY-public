@@ -1,0 +1,20 @@
+data_config:
+  data_folder: "../data"  # Common base path
+  brain_area: "CO"  # Default value that can be overridden
+  subjects:
+    - subject: C
+      dates: [20150309, 20150312, 20150313, 20150319, 20150629, 20150630, 20150701, 20150703, 20150706, 20150707, 20150708, 20150710, 20150713, 20151103, 20151104, 20151106, 20151109, 20151110, 20151112, 20151113, 20151119, 20151120, 20151201, 20160909, 20160912, 20160915, 20160919]
+    - subject: M
+      dates: [20140203, 20140218, 20140303, 20140304, 20140307, 20140627, 20140929, 20141203, 20150512, 20150610, 20150611, 20150615, 20150616]
+  path_template: "data/Perich/000688/sub-{subject}/sub-{subject}_ses-CO-{date}_behavior+ecephys_processed_bin0.02_sigma2.5_ds2_delay0.1_fr_thre0.1_gocue_stop.pkl"
+
+data_params:
+  bin: 0.01
+  behavior_columns: ['cursor_velocity'] #'Position_cursor_pos', 'Acceleration_cursor_acc'],
+  min_trial_len : 0
+  max_trial_len : 10000
+  seed : 0
+  val_size: 0.1
+  test_size: 0.3
+  neural_normalizor : zscore
+  behavior_normalizor : zscore
