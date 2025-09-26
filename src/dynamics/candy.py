@@ -14,10 +14,10 @@ from src.dynamics.base_dynamics import sharedDynamics
 from src.dynamics.utils.utils_dfine import get_default_config, carry_to_device, get_nrmse_error, get_kernel_initializer_function, compute_mse, get_activation_function, transform2bytrial_byagent
 from src.dynamics.utils.rnc_loss import RnCLoss
 
-class SharedDFINEDynamics(sharedDynamics):
+class CANDYDynamics(sharedDynamics):
     def __init__(self, obs_dim_list, latent_dim, **kwargs):
         """
-        Initializes the SharedDFINEDynamics class.
+        Initializes the CANDYDynamics class.
 
         Parameters:
         ------------

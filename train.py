@@ -62,7 +62,7 @@ def main(args):
     }
     os.makedirs(save_params['save_path'], exist_ok=True)
 
-    if model_type in ['SHAREDDFINE']:
+    if model_type in ['CANDY']:
         if args.behv_sup_off:
             params['model_params']['supervise_behv'] = False 
         if args.contrastive_off:
@@ -90,7 +90,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_seed', type=int, default=0,
                         help='Model seed (default: 0)')
     parser.add_argument('--model_type', type=str, required=True,
-                       help='Model type (default: SHAREDDFINE).')
+                       help='Model type (default: CANDY).')
     parser.add_argument('--model_config',type=str, required=True,
                         help='Model type corresponding yaml configuration file path.')
     parser.add_argument('--decoder_config', type=str, required=True, 

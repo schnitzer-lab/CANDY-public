@@ -13,8 +13,8 @@ from src.dynamics import *
 
 def init_model(model_type, obs_dim, latent_dim, **kwargs):
     match model_type:
-        case 'SHAREDDFINE':
-            model = SharedDFINEDynamics(obs_dim_list=obs_dim, latent_dim=latent_dim, **kwargs) # obs_dim_lst
+        case 'CANDY':
+            model = CANDYDynamics(obs_dim_list=obs_dim, latent_dim=latent_dim, **kwargs) # obs_dim_lst
     return model
 
 def init_dataloaderN(train_dataset, val_dataset, test_dataset, dataset_info, **params):
@@ -30,7 +30,7 @@ def init_dataloaderN(train_dataset, val_dataset, test_dataset, dataset_info, **p
         val_dataset_one   = val_dataset[(subject_id, session_id)]
         test_dataset_one  = test_dataset[(subject_id, session_id)]
         
-        if model_type in ['SHAREDDFINE']:
+        if model_type in ['CANDY']:
             train_dataset_one = load_rnndataset(train_dataset_one, frac=data_params['train_frac'] if 'train_frac' in data_params else 1.0)
             val_dataset_one   = load_rnndataset(val_dataset_one, frac=1.0) 
             test_dataset_one  = load_rnndataset(test_dataset_one, frac=1.0)
@@ -107,7 +107,7 @@ def get_model_name(params):
     data_seed  = data_params['seed']
     model_seed = model_args['seed']
     match model_type:
-        case 'SHAREDDFINE' | 'SHAREDDFINE_single' | 'SHAREDDFINEFix':
+        case 'CANDY':
             dim_x_behv        = model_args['dim_x_behv']
             lr_init           = model_args['lr_init']
             scale_l2          = model_args['scale_l2']
