@@ -7,7 +7,6 @@ from scipy import stats
 
 from sklearn import linear_model
 from sklearn.model_selection import RepeatedKFold, GridSearchCV
-from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 
 from src.decoding.base_decoding import Decoder
 

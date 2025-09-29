@@ -50,7 +50,7 @@ def runnerN(data_path_lst, params):
     elif data_type in ['perich_monkey']:
         train_dataset, valid_dataset, test_dataset, dataset_info = dataloader_perich(data_path_lst, **data_params)
 
-    session_names = "+".join(f"{subject_id}_{session_id}" for subject_id, session_id in dataset_info.keys()) + ".pkl"
+    session_names = "+".join(f"{sess_name}" for sess_name in dataset_info.keys()) + ".pkl"
 
     # Initialize the csv files
     df_train = init_csv(dataset_info)
@@ -162,43 +162,43 @@ def runnerN(data_path_lst, params):
         recon_score_train_lst = model.scoring(data_orig_train, train_recon)
         recon_score_test_lst  = model.scoring(data_orig_test, test_recon)
 
-        for i, (subject_id, session_id) in enumerate(dataset_info):   
+        for i, sess_name in enumerate(dataset_info):   
             # update the original dataset given that the Torch Dataset might be shuffled 
-            train_dataset[(subject_id, session_id)]['behavior_data'] = behv_train_lst[i]
-            valid_dataset[(subject_id, session_id)]['behavior_data'] = behv_valid_lst[i]
-            test_dataset[(subject_id, session_id)]['behavior_data']  = behv_test_lst[i]
-            train_dataset[(subject_id, session_id)]['neural_data'] = data_orig_train[i]
-            valid_dataset[(subject_id, session_id)]['neural_data'] = data_orig_valid[i]
-            test_dataset[(subject_id, session_id)]['neural_data']  = data_orig_test[i]
-            train_dataset[(subject_id, session_id)]['trials_type'] = trials_type_train_lst[i]
-            valid_dataset[(subject_id, session_id)]['trials_type'] = trials_type_valid_lst[i]
-            test_dataset[(subject_id, session_id)]['trials_type']  = trials_type_test_lst[i]
+            train_dataset[sess_name]['behavior_data'] = behv_train_lst[i]
+            valid_dataset[sess_name]['behavior_data'] = behv_valid_lst[i]
+            test_dataset[sess_name]['behavior_data']  = behv_test_lst[i]
+            train_dataset[sess_name]['neural_data'] = data_orig_train[i]
+            valid_dataset[sess_name]['neural_data'] = data_orig_valid[i]
+            test_dataset[sess_name]['neural_data']  = data_orig_test[i]
+            train_dataset[sess_name]['trials_type'] = trials_type_train_lst[i]
+            valid_dataset[sess_name]['trials_type'] = trials_type_valid_lst[i]
+            test_dataset[sess_name]['trials_type']  = trials_type_test_lst[i]
             # update the results buffer
-            z_hat_train_dict[(subject_id, session_id)] = z_hat_train_lst[i]
-            z_hat_valid_dict[(subject_id, session_id)] = z_hat_valid_lst[i]
-            z_hat_test_dict[(subject_id, session_id)]  = z_hat_test_lst[i]
-            a_hat_train_dict[(subject_id, session_id)] = a_hat_train_lst[i]
-            a_hat_valid_dict[(subject_id, session_id)] = a_hat_valid_lst[i]
-            a_hat_test_dict[(subject_id, session_id)]  = a_hat_test_lst[i]
-            behv_train_dict[(subject_id, session_id)] = behv_train_lst[i]
-            behv_valid_dict[(subject_id, session_id)] = behv_valid_lst[i]
-            behv_test_dict[(subject_id, session_id)]  = behv_test_lst[i]
-            behv_hat_train_dict[(subject_id, session_id)] = behv_hat_train_lst[i]
-            behv_hat_valid_dict[(subject_id, session_id)] = behv_hat_valid_lst[i]
-            behv_hat_test_dict[(subject_id, session_id)]  = behv_hat_test_lst[i]
-            trials_type_train_dict[(subject_id, session_id)] = trials_type_train_lst[i]
-            trials_type_valid_dict[(subject_id, session_id)] = trials_type_valid_lst[i]
-            trials_type_test_dict[(subject_id, session_id)]  = trials_type_test_lst[i]
+            z_hat_train_dict[sess_name] = z_hat_train_lst[i]
+            z_hat_valid_dict[sess_name] = z_hat_valid_lst[i]
+            z_hat_test_dict[sess_name]  = z_hat_test_lst[i]
+            a_hat_train_dict[sess_name] = a_hat_train_lst[i]
+            a_hat_valid_dict[sess_name] = a_hat_valid_lst[i]
+            a_hat_test_dict[sess_name]  = a_hat_test_lst[i]
+            behv_train_dict[sess_name] = behv_train_lst[i]
+            behv_valid_dict[sess_name] = behv_valid_lst[i]
+            behv_test_dict[sess_name]  = behv_test_lst[i]
+            behv_hat_train_dict[sess_name] = behv_hat_train_lst[i]
+            behv_hat_valid_dict[sess_name] = behv_hat_valid_lst[i]
+            behv_hat_test_dict[sess_name]  = behv_hat_test_lst[i]
+            trials_type_train_dict[sess_name] = trials_type_train_lst[i]
+            trials_type_valid_dict[sess_name] = trials_type_valid_lst[i]
+            trials_type_test_dict[sess_name]  = trials_type_test_lst[i]
             # update the dataframe for metrics recording
-            df_train.loc[df_index, (f'{subject_id}_{session_id}', "recon_MSE")] = recon_score_train_lst[i]['MSE']
-            df_train.loc[df_index, (f'{subject_id}_{session_id}', "recon_MAE")] = recon_score_train_lst[i]['MAE']
-            df_train.loc[df_index, (f'{subject_id}_{session_id}', "recon_R2")]  = recon_score_train_lst[i]['R2']
-            df_train.loc[df_index, (f'{subject_id}_{session_id}', "recon_Corr")]= recon_score_train_lst[i]['Corr']
+            df_train.loc[df_index, (f'{sess_name}', "recon_MSE")] = recon_score_train_lst[i]['MSE']
+            df_train.loc[df_index, (f'{sess_name}', "recon_MAE")] = recon_score_train_lst[i]['MAE']
+            df_train.loc[df_index, (f'{sess_name}', "recon_R2")]  = recon_score_train_lst[i]['R2']
+            df_train.loc[df_index, (f'{sess_name}', "recon_Corr")]= recon_score_train_lst[i]['Corr']
 
-            df_test.loc[df_index, (f'{subject_id}_{session_id}', "recon_MSE")] = recon_score_test_lst[i]['MSE']
-            df_test.loc[df_index, (f'{subject_id}_{session_id}', "recon_MAE")] = recon_score_test_lst[i]['MAE']
-            df_test.loc[df_index, (f'{subject_id}_{session_id}', "recon_R2")]  = recon_score_test_lst[i]["R2"]
-            df_test.loc[df_index, (f'{subject_id}_{session_id}', "recon_Corr")]= recon_score_test_lst[i]['Corr']
+            df_test.loc[df_index, (f'{sess_name}', "recon_MSE")] = recon_score_test_lst[i]['MSE']
+            df_test.loc[df_index, (f'{sess_name}', "recon_MAE")] = recon_score_test_lst[i]['MAE']
+            df_test.loc[df_index, (f'{sess_name}', "recon_R2")]  = recon_score_test_lst[i]["R2"]
+            df_test.loc[df_index, (f'{sess_name}', "recon_Corr")]= recon_score_test_lst[i]['Corr']
         
         # Save pickle files
         with open(f"{parent_folder}/results.pkl", 'wb') as f:

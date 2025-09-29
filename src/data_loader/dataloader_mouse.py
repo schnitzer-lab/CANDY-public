@@ -40,12 +40,12 @@ def dataloader_mouse_wheel(fpath_lst, **data_params):
         session_date = fpath[-16:-8] 
         results = _load_onefile(fpath, **data_params)
         print(f'[INFO] subject {subject_id} session {session_date} data LOADED!')
+        sess_name = f'Animal_{subject_id}-Session_{session_date}'
 
-
-        train_dataset[(f'Animal-{subject_id}', f'Session-{session_date}')] = {'neural_data': [], 'behavior_data': [], 'trials_type': [], 'trials_length': []}
-        val_dataset[(f'Animal-{subject_id}', f'Session-{session_date}')]   = {'neural_data': [], 'behavior_data': [], 'trials_type': [], 'trials_length': []}
-        test_dataset[(f'Animal-{subject_id}', f'Session-{session_date}')]  = {'neural_data': [], 'behavior_data': [], 'trials_type': [], 'trials_length': []}
-        dataset_info[(f'Animal-{subject_id}', f'Session-{session_date}')]  = {'train_trials': None, 'val_trials': None, 'test_trials': None, 'obs_dim': None}
+        train_dataset[sess_name] = {'neural_data': [], 'behavior_data': [], 'trials_type': [], 'trials_length': []}
+        val_dataset[sess_name]   = {'neural_data': [], 'behavior_data': [], 'trials_type': [], 'trials_length': []}
+        test_dataset[sess_name]  = {'neural_data': [], 'behavior_data': [], 'trials_type': [], 'trials_length': []}
+        dataset_info[sess_name]  = {'train_trials': None, 'val_trials': None, 'test_trials': None, 'obs_dim': None}
         ### Get the train-val-test split based on trials ###
         num_trials = results['num_trials']
         train_trials, val_trials, test_trials = train_val_test_split(num_trials, data_params['val_size'], data_params['test_size'], seed)
@@ -56,10 +56,10 @@ def dataloader_mouse_wheel(fpath_lst, **data_params):
         trial_types   = results['trial_types_data']
 
         obs_dim = neural_data[0].shape[1]
-        dataset_info[(f'Animal-{subject_id}', f'Session-{session_date}')]['obs_dim'] = obs_dim
-        dataset_info[(f'Animal-{subject_id}', f'Session-{session_date}')]['train_trials'] = train_trials 
-        dataset_info[(f'Animal-{subject_id}', f'Session-{session_date}')]['val_trials']   = val_trials 
-        dataset_info[(f'Animal-{subject_id}', f'Session-{session_date}')]['test_trials']  = test_trials
+        dataset_info[sess_name]['obs_dim'] = obs_dim
+        dataset_info[sess_name]['train_trials'] = train_trials 
+        dataset_info[sess_name]['val_trials']   = val_trials 
+        dataset_info[sess_name]['test_trials']  = test_trials
 
         # Get the neural data before normalization
         train_neural_data = [neural_data[k] for k in train_trials]
@@ -103,21 +103,21 @@ def dataloader_mouse_wheel(fpath_lst, **data_params):
         val_behv_data   = concatenate_behaviors(behv_data_val_norm_dic, num_val, data_params['behavior_keys'])
         test_behv_data  = concatenate_behaviors(behv_data_test_norm_dic, num_test, data_params['behavior_keys'])
         ######################
-        train_dataset[(f'Animal-{subject_id}', f'Session-{session_date}')]['neural_data'] = train_neural_data
-        val_dataset[(f'Animal-{subject_id}', f'Session-{session_date}')]['neural_data']   = val_neural_data
-        test_dataset[(f'Animal-{subject_id}', f'Session-{session_date}')]['neural_data']  = test_neural_data
+        train_dataset[sess_name]['neural_data'] = train_neural_data
+        val_dataset[sess_name]['neural_data']   = val_neural_data
+        test_dataset[sess_name]['neural_data']  = test_neural_data
 
-        train_dataset[(f'Animal-{subject_id}', f'Session-{session_date}')]['behavior_data'] = train_behv_data
-        val_dataset[(f'Animal-{subject_id}', f'Session-{session_date}')]['behavior_data']   = val_behv_data
-        test_dataset[(f'Animal-{subject_id}', f'Session-{session_date}')]['behavior_data']  = test_behv_data
+        train_dataset[sess_name]['behavior_data'] = train_behv_data
+        val_dataset[sess_name]['behavior_data']   = val_behv_data
+        test_dataset[sess_name]['behavior_data']  = test_behv_data
 
-        train_dataset[(f'Animal-{subject_id}', f'Session-{session_date}')]['trials_type'] = train_trials_type 
-        val_dataset[(f'Animal-{subject_id}', f'Session-{session_date}')]['trials_type']   = val_trials_type
-        test_dataset[(f'Animal-{subject_id}', f'Session-{session_date}')]['trials_type']  = test_trials_type
+        train_dataset[sess_name]['trials_type'] = train_trials_type 
+        val_dataset[sess_name]['trials_type']   = val_trials_type
+        test_dataset[sess_name]['trials_type']  = test_trials_type
 
-        train_dataset[(f'Animal-{subject_id}', f'Session-{session_date}')]['trials_length'] = train_trials_len
-        val_dataset[(f'Animal-{subject_id}', f'Session-{session_date}')]['trials_length']   = val_trials_len
-        test_dataset[(f'Animal-{subject_id}', f'Session-{session_date}')]['trials_length']  = test_trials_len
+        train_dataset[sess_name]['trials_length'] = train_trials_len
+        val_dataset[sess_name]['trials_length']   = val_trials_len
+        test_dataset[sess_name]['trials_length']  = test_trials_len
     return train_dataset, val_dataset, test_dataset, dataset_info
 
 ########### Helper functions ##########

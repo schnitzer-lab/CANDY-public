@@ -11,7 +11,7 @@ import datetime
 import logging
 
 from src.dynamics.base_dynamics import sharedDynamics
-from src.dynamics.utils.utils_dfine import get_default_config, carry_to_device, get_nrmse_error, get_kernel_initializer_function, compute_mse, get_activation_function, transform2bytrial_byagent
+from src.dynamics.utils.utils_candy import get_default_config, carry_to_device, get_nrmse_error, get_kernel_initializer_function, compute_mse, get_activation_function, transform2bytrial_byagent
 from src.dynamics.utils.rnc_loss import RnCLoss
 
 class CANDYDynamics(sharedDynamics):
@@ -26,7 +26,6 @@ class CANDYDynamics(sharedDynamics):
         - latent_dim: int, Dimensionality of the latent space
         - **kwargs: Additional keyword arguments
             - hidden_size_enc: int, Hidden layer dimension of the encoder
-            - distr_size: int, Size of the encoder's mean and variation
             - hidden_size_dec: int, Hidden layer dimension of the decoder
             - dropout: float, Dropout ratio (between 0 and 1)
             - output_size: int, Size of the output dimension (optional, default = obs_dim)
@@ -54,10 +53,6 @@ class CANDYDynamics(sharedDynamics):
         self.config.model.contrastive_scale = kwargs.pop('contrastive_scale', self.config.model.contrastive_scale)
         self.config.model.contrastive_time_scaler = kwargs.pop('contrastive_time_scaler', self.config.model.contrastive_time_scaler)
         self.config.model.contrastive_num_batch = kwargs.pop('contrastive_num_batch', self.config.model.contrastive_num_batch)
-        self.config.model.use_variation = kwargs.pop('use_variation', self.config.model.use_variation)
-        self.config.model.kl_scale      = kwargs.pop('kl_scale', self.config.model.kl_scale)
-        self.config.model.dim_l         = kwargs.pop('dim_l', self.config.model.dim_l)
-        self.config.model.dist_hidden_layer_lst = kwargs.pop('dim_l', self.config.model.dist_hidden_layer_lst)
 
         self.config.model.use_subject_discriminator = kwargs.pop('use_subject_discriminator', self.config.model.use_subject_discriminator)
         self.config.model.num_subjects = kwargs.pop('num_subjects', self.config.model.num_subjects)
@@ -109,12 +104,12 @@ class CANDYDynamics(sharedDynamics):
             ldm_individual.to(self.device)
             self.ldm_individual_list.append(ldm_individual)
 
-        self.dfine_list = list()
+        self.candy_list = list()
         for i in range(self.n_subjects):
             self.config.model.dim_y = obs_dim_list[i]
-            dfine = SharedDFINE(self.config)
-            dfine.to(self.device) # carry the model to the desired device
-            self.dfine_list.append(dfine)
+            candy = CANDY(self.config)
+            candy.to(self.device) # carry the model to the desired device
+            self.candy_list.append(candy)
 
         # Define shared behavioral decoder
         if self.config.model.supervise_behv:
@@ -151,12 +146,12 @@ class CANDYDynamics(sharedDynamics):
         
         self.batch_size = kwargs['batch_size']
 
-        dfine_params = sum([list(dfine.parameters()) for dfine in self.dfine_list], list())
+        candy_params = sum([list(candy.parameters()) for candy in self.candy_list], list())
         ldm_params = list(self.ldm.parameters())
         ldm_individual_params = sum([list(ldm_individual.parameters()) for ldm_individual in self.ldm_individual_list], list())
         mapper_params = list(self.mapper.parameters()) if self.mapper is not None else []
         subject_discriminator_params = list(self.subject_discriminator.parameters()) if self.config.model.use_subject_discriminator else []
-        params = dfine_params + ldm_params + mapper_params + ldm_individual_params + subject_discriminator_params
+        params = candy_params + ldm_params + mapper_params + ldm_individual_params + subject_discriminator_params
         self.optimizer = self._get_optimizer(params)
         self.lr_scheduler = self._get_lr_scheduler()
 
@@ -167,7 +162,6 @@ class CANDYDynamics(sharedDynamics):
                 'behv_losses' : [],
                 'contrastive_losses': [],
                 'model_losses': [],
-                'kl_losses': [],
                 'reg_losses'  : [],
                 'discriminator_losses': [],
                 'total_losses': []
@@ -175,7 +169,6 @@ class CANDYDynamics(sharedDynamics):
             'valid': {
                 'behv_losses' : [],
                 'contrastive_losses': [],
-                'kl_losses': [],
                 'model_losses': [],
                 'reg_losses'  : [],
                 'discriminator_losses': [],
@@ -184,7 +177,7 @@ class CANDYDynamics(sharedDynamics):
         }
 
         # Initialize logger 
-        self.logger = self._get_logger(prefix='dfine')
+        self.logger = self._get_logger(prefix='candy')
 
 
     def _set_dims_and_scales(self):
@@ -279,14 +272,14 @@ class CANDYDynamics(sharedDynamics):
             - train: 
                 - steps_{k}_mse: metrics.Mean, Training {k}-step ahead predicted MSE         
                 - model_loss: metrics.Mean, Training negative sum of {k}-step ahead predicted MSEs (e.g. steps_1_mse + steps_2_mse)
-                - reg_loss: metrics.Mean, L2 regularization loss for DFINE encoder and decoder weights
+                - reg_loss: metrics.Mean, L2 regularization loss for CANDY encoder and decoder weights
                 - behv_mse: metrics.Mean, Exists if config.model.supervise_behv is True, Training behavior MSE
                 - behv_loss: metrics.Mean, Exists if config.model.supervise_behv is True, Training behavior reconstruction loss
                 - total_loss: metrics.Mean, Sum of training model_loss, reg_loss and behv_loss (if config.model.supervise_behv is True)
             - valid: 
                 - steps_{k}_mse: metrics.Mean, Validation {k}-step ahead predicted MSE
                 - model_loss: metrics.Mean, Validation negative sum of {k}-step ahead predicted MSEs (e.g. steps_1_mse + steps_2_mse)
-                - reg_loss: metrics.Mean, L2 regularization loss for DFINE encoder and decoder weights
+                - reg_loss: metrics.Mean, L2 regularization loss for CANDY encoder and decoder weights
                 - behv_mse: metrics.Mean, Exists if config.model.supervise_behv is True, Validation behavior MSE
                 - behv_loss: metrics.Mean, Exists if config.model.supervise_behv is True, Validation behavior reconstruction loss
                 - total_loss: metrics.Mean, Sum of validation model_loss, reg_loss and behv_loss (if config.model.supervise_behv is True)
@@ -301,8 +294,6 @@ class CANDYDynamics(sharedDynamics):
             metric_names.append('behv_loss')
         if self.config.model.contrastive:
             metric_names.append('contrastive_loss')
-        if self.config.model.use_variation:
-            metric_names.append('kl_loss')
         if self.config.model.use_subject_discriminator:
             metric_names.append('discriminator_loss')
         metric_names.append('model_loss')
@@ -355,13 +346,13 @@ class CANDYDynamics(sharedDynamics):
         return scheduler
 
 
-    def _load_ckpt(self, dfine_list, ldm, ldm_individual_list, mapper, subject_discriminator, optimizer, lr_scheduler=None):
+    def _load_ckpt(self, candy_list, ldm, ldm_individual_list, mapper, subject_discriminator, optimizer, lr_scheduler=None):
         '''
         Loads the checkpoint specified in the config by config.load.ckpt.
 
         Parameters:
         ------------
-        - dfine_list: list, List of initialized DFINE models to load the parameters to
+        - candy_list: list, List of initialized CANDY models to load the parameters to
         - ldm: torch.nn.Module, Initialized LDM model to load the parameters to
         - mapper: torch.nn.Module, Initialized Mapper model to load the parameters to (None by default)
         - optimizer: torch.optim.Adam, Initialized Adam optimizer to load optimizer parameters to (loading is skipped if config.load.resume_train is False)
@@ -369,7 +360,7 @@ class CANDYDynamics(sharedDynamics):
 
         Returns:
         ------------
-        - dfine_list: list, Loaded DFINE models
+        - candy_list: list, Loaded CANDY models
         - ldm: torch.nn.Module, Loaded LDM model
         - mapper: torch.nn.Module, Loaded Mapper model (if provided, otherwise, None)
         - optimizer: torch.optim.Adam, Loaded Adam optimizer (if config.load.resume_train is True, otherwise, initialized optimizer is returned)
@@ -404,8 +395,8 @@ class CANDYDynamics(sharedDynamics):
                     assert False, ''
 
         try:
-            for i in range(len(dfine_list)):
-                dfine_list[i].load_state_dict(ckpt['dfine_state_dict_list'][i])
+            for i in range(len(candy_list)):
+                candy_list[i].load_state_dict(ckpt['candy_state_dict_list'][i])
             ldm.load_state_dict(ckpt['ldm_state_dict'])
             if mapper is not None:
                 mapper.load_state_dict(ckpt['mapper_state_dict'])
@@ -419,17 +410,17 @@ class CANDYDynamics(sharedDynamics):
             ldm_individual_list[i].load_state_dict(ckpt['ldm_individual_state_dict_list'][i])
         
         self.logger.info(f'Checkpoint succesfully loaded from {load_path}!')
-        return dfine_list, ldm, ldm_individual_list, mapper, subject_discriminator, optimizer, lr_scheduler
+        return candy_list, ldm, ldm_individual_list, mapper, subject_discriminator, optimizer, lr_scheduler
 
 
-    def _save_ckpt(self, epoch, dfine_list, ldm, ldm_individual_list, mapper, subject_discriminator, optimizer, lr_scheduler=None):
+    def _save_ckpt(self, epoch, candy_list, ldm, ldm_individual_list, mapper, subject_discriminator, optimizer, lr_scheduler=None):
         '''
         Saves the checkpoint under ckpt_save_dir (see __init__) with filename {epoch}_ckpt.pth
 
         Parameters:
         ------------
         - epoch: int, Epoch number for which the checkpoint is to be saved for
-        - dfine_list: list, List of initialized DFINE models to be saved
+        - candy_list: list, List of initialized CANDY models to be saved
         - ldm: torch.nn.Module, Initialized LDM model to be saved
         - mapper: torch.nn.Module, Initialized Mapper model to be saved (None by default)
         - optimizer: torch.optim.Adam, Initialized Adam optimizer to be saved (loading is skipped if config.load.resume_train is False)
@@ -439,7 +430,7 @@ class CANDYDynamics(sharedDynamics):
         save_path = os.path.join(self.ckpt_save_dir, f'{epoch}_ckpt.pth')
         if lr_scheduler is not None:
             torch.save({
-                        'dfine_state_dict_list': [dfine.state_dict() for dfine in dfine_list],
+                        'candy_state_dict_list': [candy.state_dict() for candy in candy_list],
                         'ldm_state_dict': ldm.state_dict(),
                         'ldm_individual_state_dict_list': [ldm_individual.state_dict() for ldm_individual in ldm_individual_list],
                         'mapper_state_dict': mapper.state_dict() if mapper is not None else None,
@@ -450,7 +441,7 @@ class CANDYDynamics(sharedDynamics):
                         }, save_path)
         else:
             torch.save({
-                        'dfine_state_dict_list': [dfine.state_dict() for dfine in dfine_list],
+                        'candy_state_dict_list': [candy.state_dict() for candy in candy_list],
                         'ldm_state_dict': ldm.state_dict(),
                         'ldm_individual_state_dict_list': [ldm_individual.state_dict() for ldm_individual in ldm_individual_list],
                         'mapper_state_dict': mapper.state_dict() if mapper is not None else None,
@@ -493,8 +484,6 @@ class CANDYDynamics(sharedDynamics):
             self.losses[train_valid]['behv_losses'].append(avg_loss_dict['behv_loss'].detach().cpu().numpy())
         if self.config.model.contrastive:
             self.losses[train_valid]['contrastive_losses'].append(avg_loss_dict['contrastive_loss'].detach().cpu().numpy())
-        if self.config.model.use_variation:
-            self.losses[train_valid]['kl_losses'].append(avg_loss_dict['kl_loss'].detach().cpu().numpy())
         if self.config.model.use_subject_discriminator:
             self.losses[train_valid]['discriminator_losses'].append(avg_loss_dict['discriminator_loss'].detach().cpu().numpy())
         self.losses[train_valid]['model_losses'].append(avg_loss_dict['model_loss'].detach().cpu().numpy())
@@ -516,13 +505,13 @@ class CANDYDynamics(sharedDynamics):
             metric.reset()
 
 
-    def _get_logger(self, prefix='dfine'):
+    def _get_logger(self, prefix='candy'):
         '''
         Creates the logger which is saved as .log file under config.model.save_dir
 
         Parameters:
         ------------
-        - prefix: str, Prefix which is used as logger's name and .log file's name, 'dfine' by default 
+        - prefix: str, Prefix which is used as logger's name and .log file's name, 'candy' by default 
 
         Returns:
         ------------
@@ -587,17 +576,14 @@ class CANDYDynamics(sharedDynamics):
                 log_str += f"{k}_steps_mse: {self.metrics[train_valid][f'steps_{k}_mse'].compute():.5f}\n"
 
         # Logging L2 regularization loss and L2 scale 
-        log_str += f"reg_loss: {self.metrics[train_valid]['reg_loss'].compute():.5f}, scale_l2: {self.dfine_list[0].scale_l2:.5f}\n"
+        log_str += f"reg_loss: {self.metrics[train_valid]['reg_loss'].compute():.5f}, scale_l2: {self.candy_list[0].scale_l2:.5f}\n"
 
         # If model is behavior-supervised, log behavior reconstruction loss
         if self.config.model.supervise_behv:
-            log_str += f"behv_loss: {self.metrics[train_valid]['behv_loss'].compute():.5f}, scale_behv_recons: {self.dfine_list[0].scale_behv_recons:.5f}\n"
+            log_str += f"behv_loss: {self.metrics[train_valid]['behv_loss'].compute():.5f}, scale_behv_recons: {self.candy_list[0].scale_behv_recons:.5f}\n"
 
         if self.config.model.contrastive:
             log_str += f"contrastive_loss: {self.metrics[train_valid]['contrastive_loss'].compute():.5f}, contrastive_scale: {self.config.model.contrastive_scale:.5f}\n"
-        
-        if self.config.model.use_variation:
-            log_str += f"kl_loss: {self.metrics[train_valid]['kl_loss'].compute():.5f}, kl_scale: {self.config.model.kl_scale:.5f}\n"
 
         if self.config.model.use_subject_discriminator:
             log_str += f"discriminator_loss: {self.metrics[train_valid]['discriminator_loss'].compute():.5f}, subject_discriminator_scale: {self.config.model.subject_discriminator_scale:.5f}\n"
@@ -620,7 +606,7 @@ class CANDYDynamics(sharedDynamics):
 
         # Take the model into training mode
         for i_sub in range(self.n_subjects):
-            self.dfine_list[i_sub].train()
+            self.candy_list[i_sub].train()
 
         # Reset the metrics at the beginning of each epoch
         self._reset_metrics(train_valid='train')
@@ -639,7 +625,6 @@ class CANDYDynamics(sharedDynamics):
             'total_loss': 0,
             'discriminator_loss': 0,
             'contrastive_loss': 0,
-            'kl_loss': 0
         }
         for k in self.config.loss.steps_ahead:
             running_losses[f'steps_{k}_mse'] = 0
@@ -667,20 +652,13 @@ class CANDYDynamics(sharedDynamics):
                 y_batch, behv_batch, mask_batch = batch
 
                 # Perform forward pass and compute loss
-                model_vars = self.dfine_list[i_sub](y=y_batch, ldm=self.ldm, mapper=self.mapper, mask=mask_batch, ldm_individual=self.ldm_individual_list[i_sub], normalize=epoch<1)
+                model_vars = self.candy_list[i_sub](y=y_batch, ldm=self.ldm, mapper=self.mapper, mask=mask_batch, ldm_individual=self.ldm_individual_list[i_sub], normalize=epoch<1)
 
-                loss, loss_dict = self.dfine_list[i_sub].compute_loss(y=y_batch, 
+                loss, loss_dict = self.candy_list[i_sub].compute_loss(y=y_batch, 
                                                         model_vars=model_vars, 
                                                         mask=mask_batch, 
                                                         behv=behv_batch)
                 total_loss += loss
-
-                if self.config.model.use_variation:
-                    dist_mu     = model_vars['dist_mu']
-                    dist_logvar = model_vars['dist_logvar']
-                    kl_loss = torch.mean(-0.5 * torch.sum(1 + dist_logvar - dist_mu ** 2 - dist_logvar.exp(), dim = 1), dim = 0)
-                    loss_dict['kl_loss'] = kl_loss * self.config.model.kl_scale
-                    total_loss += loss_dict['kl_loss'] 
 
                 total_loss_dict_list.append(loss_dict)
 
@@ -741,7 +719,7 @@ class CANDYDynamics(sharedDynamics):
             # Skip gradient clipping for the first epoch
             # if epoch > 1:
             for i_sub in range(self.n_subjects):
-                clip_grad_norm_(self.dfine_list[i_sub].parameters(), self.config.optim.grad_clip)
+                clip_grad_norm_(self.candy_list[i_sub].parameters(), self.config.optim.grad_clip)
             clip_grad_norm_(self.ldm.parameters(), self.config.optim.grad_clip)
             if self.config.model.supervise_behv:
                 clip_grad_norm_(self.mapper.parameters(), self.config.optim.grad_clip)
@@ -757,20 +735,13 @@ class CANDYDynamics(sharedDynamics):
 
             for metric, loss in avg_loss_dict.items():
                     running_losses[metric] += avg_loss_dict[metric].detach().cpu().numpy().item()
-            # running_losses['behv_loss']  += np.mean([loss_dict['behv_loss'] for loss_dict in total_loss_dict_list])
-            # running_losses['behv_mse']   += np.mean([loss_dict['behv_mse'] for loss_dict in total_loss_dict_list])
-            # running_losses['model_loss'] += np.mean([loss_dict['model_loss'] for loss_dict in total_loss_dict_list])
-            # running_losses['reg_loss']   += np.mean([loss_dict['reg_loss'] for loss_dict in total_loss_dict_list])
-            # running_losses['total_loss'] += np.mean([loss_dict['total_loss'] for loss_dict in total_loss_dict_list])
-            # if self.config.model.use_variation:
-            #     running_losses['kl_loss'] += np.mean([loss_dict['kl_loss'] for loss_dict in total_loss_dict_list])
             # Update the step 
             step += 1
         
         # Save model, optimizer and learning rate scheduler (we save the initial and the last model no matter what config.model.save_steps is)
         if epoch % self.config.model.save_steps == 0 or epoch == 1 or epoch == self.config.train.num_epochs:
             self._save_ckpt(epoch=epoch, 
-                            dfine_list=self.dfine_list, 
+                            candy_list=self.candy_list, 
                             ldm=self.ldm,
                             ldm_individual_list=self.ldm_individual_list,
                             mapper=self.mapper,
@@ -804,7 +775,7 @@ class CANDYDynamics(sharedDynamics):
 
         with torch.no_grad():
             for i_sub in range(self.n_subjects):
-                self.dfine_list[i_sub].eval()
+                self.candy_list[i_sub].eval()
 
             # Reset the metrics at the beginning of each epoch
             self._reset_metrics(train_valid='valid')
@@ -818,7 +789,6 @@ class CANDYDynamics(sharedDynamics):
                 'total_loss': 0,
                 'discriminator_loss': 0,
                 'contrastive_loss': 0,
-                'kl_loss': 0
             }
             for k in self.config.loss.steps_ahead:
                 running_losses[f'steps_{k}_mse'] = 0
@@ -851,22 +821,15 @@ class CANDYDynamics(sharedDynamics):
                     y_batch, behv_batch, mask_batch = batch
 
                     # Perform forward pass and compute loss
-                    model_vars = self.dfine_list[i_sub](y=y_batch, ldm=self.ldm, mapper=self.mapper, mask=mask_batch, ldm_individual=self.ldm_individual_list[i_sub], normalize=False)
+                    model_vars = self.candy_list[i_sub](y=y_batch, ldm=self.ldm, mapper=self.mapper, mask=mask_batch, ldm_individual=self.ldm_individual_list[i_sub], normalize=False)
 
-                    loss, loss_dict = self.dfine_list[i_sub].compute_loss(y=y_batch, 
+                    loss, loss_dict = self.candy_list[i_sub].compute_loss(y=y_batch, 
                                                             model_vars=model_vars, 
                                                             mask=mask_batch, 
                                                             behv=behv_batch)
                     if loss > 10:
                         print(f'[DEBUG] WARNING: loss is too high, check the model! [subject {i_sub}, loss {loss}]')
                     total_loss += loss
-
-                    if self.config.model.use_variation:
-                        dist_mu = model_vars['dist_mu']
-                        dist_logvar = model_vars['dist_logvar']
-                        kl_loss = torch.mean(-0.5 * torch.sum(1 + dist_logvar - dist_mu ** 2 - dist_logvar.exp(), dim = 1), dim = 0)
-                        loss_dict['kl_loss'] = kl_loss * self.config.model.kl_scale
-                        total_loss += loss_dict['kl_loss']
 
                     total_loss_dict_list.append(loss_dict)
 
@@ -923,13 +886,6 @@ class CANDYDynamics(sharedDynamics):
                 
                 for metric, loss in avg_loss_dict.items():
                     running_losses[metric] += avg_loss_dict[metric].detach().cpu().numpy().item()
-                # running_losses['behv_loss']  += avg_loss_dict['behv_loss'].detach().cpu().numpy().item()
-                # running_losses['behv_mse']   += avg_loss_dict['behv_mse'] for loss_dict in total_loss_dict_list])
-                # running_losses['model_loss'] += np.mean([loss_dict['model_loss'] for loss_dict in total_loss_dict_list])
-                # running_losses['reg_loss']   += np.mean([loss_dict['reg_loss'] for loss_dict in total_loss_dict_list])
-                # running_losses['total_loss'] += np.mean([loss_dict['total_loss'] for loss_dict in total_loss_dict_list])
-                # if self.config.model.use_variation:
-                #     running_losses['kl_loss'] += np.mean([loss_dict['kl_loss'] for loss_dict in total_loss_dict_list])
                     
                 del total_loss
 
@@ -937,7 +893,7 @@ class CANDYDynamics(sharedDynamics):
             if self.metrics['valid']['model_loss'].compute() < self.best_val_loss:
                 self.best_val_loss = self.metrics['valid']['model_loss'].compute()
                 self._save_ckpt(epoch='best_loss', 
-                                dfine_list=self.dfine_list,
+                                candy_list=self.candy_list,
                                 ldm=self.ldm,
                                 ldm_individual_list=self.ldm_individual_list,
                                 mapper=self.mapper,
@@ -949,7 +905,7 @@ class CANDYDynamics(sharedDynamics):
                 if self.metrics['valid']['behv_loss'].compute() < self.best_val_behv_loss:
                     self.best_val_behv_loss = self.metrics['valid']['behv_loss'].compute()
                     self._save_ckpt(epoch='best_behv_loss', 
-                                    dfine_list=self.dfine_list,
+                                    candy_list=self.candy_list,
                                     ldm=self.ldm,
                                     ldm_individual_list=self.ldm_individual_list,
                                     mapper=self.mapper,
@@ -981,8 +937,8 @@ class CANDYDynamics(sharedDynamics):
 
         encoding_dict_list = list()
         with torch.no_grad():
-            for dfine, loader, ldm_individual in zip(self.dfine_list, loader_list, self.ldm_individual_list):
-                dfine.eval()
+            for candy, loader, ldm_individual in zip(self.candy_list, loader_list, self.ldm_individual_list):
+                candy.eval()
 
                 ############################################################################ BATCH INFERENCE ############################################################################
                 # Create the keys for encoding results dictionary
@@ -1024,7 +980,7 @@ class CANDYDynamics(sharedDynamics):
                         batch = (y_batch, behv_batch, mask_batch, type_batch)
                         batch = carry_to_device(data=list(batch), device=self.device)
                         y_batch, behv_batch, mask_batch, type_batch = batch
-                        model_vars = dfine(y=y_batch, mask=mask_batch, ldm=self.ldm, mapper=self.mapper, ldm_individual=ldm_individual, normalize=False)
+                        model_vars = candy(y=y_batch, mask=mask_batch, ldm=self.ldm, mapper=self.mapper, ldm_individual=ldm_individual, normalize=False)
 
                         # Append the inference variables to the empty lists created in the beginning
                         encoding_dict['x_pred'].append(model_vars['x_pred'].detach().cpu())
@@ -1045,7 +1001,7 @@ class CANDYDynamics(sharedDynamics):
 
                         for k in self.config.loss.steps_ahead:
                             if k != 1:
-                                y_pred_k, _, _ = dfine.get_k_step_ahead_prediction(model_vars, k)
+                                y_pred_k, _, _ = candy.get_k_step_ahead_prediction(model_vars, k)
                                 encoding_dict[f'y_{k}_pred'].append(y_pred_k)
                         
                         encoding_dict['behv'].append(behv_batch.detach().cpu())
@@ -1104,7 +1060,7 @@ class CANDYDynamics(sharedDynamics):
                     # Dump variables to encoding_dict_full_inference
                     if isinstance(loader, torch.utils.data.dataloader.DataLoader):
                         # Flatten the batches of neural observations, corresponding mask and behavior if model is supervised
-                        encoding_dict_full_inference['y'] = encoding_dict['y'].reshape(1, -1, dfine.dim_y) 
+                        encoding_dict_full_inference['y'] = encoding_dict['y'].reshape(1, -1, candy.dim_y) 
                         encoding_dict_full_inference['mask'] = encoding_dict['mask'].reshape(1, -1, 1) 
 
                         # if self.config.model.supervise_behv:
@@ -1114,7 +1070,7 @@ class CANDYDynamics(sharedDynamics):
                         # record trials type
                         encoding_dict_full_inference['ttype'] = encoding_dict['ttype']
                         
-                        model_vars = dfine(y=encoding_dict_full_inference['y'].to(self.device), mask=encoding_dict_full_inference['mask'].to(self.device), ldm=self.ldm, mapper=self.mapper, ldm_individual=ldm_individual, normalize=False)
+                        model_vars = candy(y=encoding_dict_full_inference['y'].to(self.device), mask=encoding_dict_full_inference['mask'].to(self.device), ldm=self.ldm, mapper=self.mapper, ldm_individual=ldm_individual, normalize=False)
 
                         # Append the inference variables to the empty lists created in the beginning
                         encoding_dict_full_inference['x_pred'] = model_vars['x_pred'].detach().cpu()
@@ -1133,7 +1089,7 @@ class CANDYDynamics(sharedDynamics):
 
                         for k in self.config.loss.steps_ahead:
                             if k != 1:
-                                y_pred_k, _, _ = dfine.get_k_step_ahead_prediction(model_vars, k)
+                                y_pred_k, _, _ = candy.get_k_step_ahead_prediction(model_vars, k)
                                 encoding_dict_full_inference[f'y_{k}_pred'] = y_pred_k
 
                         if self.config.model.supervise_behv:
@@ -1175,18 +1131,18 @@ class CANDYDynamics(sharedDynamics):
 
         # self.batch_size = kwargs['batch_size']
 
-        # dfine_params = sum([list(dfine.parameters()) for dfine in self.dfine_list], list())
+        # candy_params = sum([list(candy.parameters()) for candy in self.candy_list], list())
         # ldm_params = list(self.ldm.parameters())
         # ldm_individual_params = sum([list(ldm_individual.parameters()) for ldm_individual in self.ldm_individual_list], list())
         # mapper_params = list(self.mapper.parameters()) if self.mapper is not None else []
         # subject_discriminator_params = list(self.subject_discriminator.parameters()) if self.config.model.use_subject_discriminator else []
-        # params = dfine_params + ldm_params + mapper_params + ldm_individual_params + subject_discriminator_params
+        # params = candy_params + ldm_params + mapper_params + ldm_individual_params + subject_discriminator_params
         # self.optimizer = self._get_optimizer(params)
         # self.lr_scheduler = self._get_lr_scheduler()
 
         # Load ckpt if asked, model with best validation model loss can be loaded as well, which is saved with name 'best_loss_ckpt.pth'
         if (isinstance(self.config.load.ckpt, int) and self.config.load.ckpt > 1) or isinstance(self.config.load.ckpt, str): 
-            self.dfine_list, self.ldm, self.ldm_individual_list, self.mapper, self.subject_discriminator, self.optimizer, self.lr_scheduler = self._load_ckpt(dfine_list=self.dfine_list,
+            self.candy_list, self.ldm, self.ldm_individual_list, self.mapper, self.subject_discriminator, self.optimizer, self.lr_scheduler = self._load_ckpt(candy_list=self.candy_list,
                                                                             ldm=self.ldm,
                                                                             ldm_individual_list=self.ldm_individual_list,
                                                                             mapper=self.mapper,
@@ -1299,11 +1255,11 @@ class Mean(Metric):
         return avg
 
 
-class SharedDFINE(nn.Module):
+class CANDY(nn.Module):
     '''
-    DFINE (Dynamical Flexible Inference for Nonlinear Embeddings) Model. 
+    CANDY (Dynamical Flexible Inference for Nonlinear Embeddings) Model. 
 
-    DFINE is a novel neural network model of neural population activity with the ability to perform 
+    CANDY is a novel neural network model of neural population activity with the ability to perform 
     flexible inference while modeling the nonlinear latent manifold structure and linear temporal dynamics. 
     To model neural population activity, two sets of latent factors are defined: the dynamic latent factors 
     which characterize the linear temporal dynamics on a nonlinear manifold, and the manifold latent factors 
@@ -1316,30 +1272,30 @@ class SharedDFINE(nn.Module):
     - x: The dynamic latent factors, (num_seq, num_steps, dim_x).
 
 
-    * Please note that DFINE can perform learning and inference both for continuous data or trial-based data or segmented continuous data. In the case of continuous data,
+    * Please note that CANDY can perform learning and inference both for continuous data or trial-based data or segmented continuous data. In the case of continuous data,
     num_seq and batch_size can be set to 1, and we let the model be optimized from the long time-series (this is basically gradient descent and not batch-based gradient descent). 
     In case of trial-based data, we can just pass the 3D tensor as the shape (num_seq, num_steps, dim_y) suggests. In case of segmented continuous data,
-    num_seq can be the number of segments and DFINE provides both per-segment and concatenated inference at the end for the user's convenience. In the concatenated inference, 
+    num_seq can be the number of segments and CANDY provides both per-segment and concatenated inference at the end for the user's convenience. In the concatenated inference, 
     the assumption is the concatenation of segments form a continuous time-series (single time-series with batch size of 1).
     '''
 
     def __init__(self, config):
         '''
-        Initializer for an DFINE object. Note that DFINE is a subclass of torch.nn.Module. 
+        Initializer for an CANDY object. Note that CANDY is a subclass of torch.nn.Module. 
 
         Parameters: 
         ------------
 
-        - config: yacs.config.CfgNode, yacs config which contains all hyperparameters required to create the DFINE model
-                                       Please see config_dfine.py for the hyperparameters, their default values and definitions. 
+        - config: yacs.config.CfgNode, yacs config which contains all hyperparameters required to create the CANDY model
+                                       Please see config_candy.py for the hyperparameters, their default values and definitions. 
         '''
 
-        super(SharedDFINE, self).__init__()
+        super(CANDY, self).__init__()
 
         # Get the config and dimension parameters
         self.config = config
 
-        # Set the seed, seed is by default set to a random integer, see config_dfine.py
+        # Set the seed, seed is by default set to a random integer, see config_candy.py
         torch.manual_seed(self.config.seed)
 
         # Set the factor dimensions and loss scales
@@ -1356,17 +1312,6 @@ class SharedDFINE(nn.Module):
                                      layer_list=self.config.model.hidden_layer_list[::-1], 
                                      activation_str=self.config.model.activation)
         
-        if self.config.model.use_variation:
-            self.fc_mu = self._get_MLP(input_dim=self.dim_a,
-                                    output_dim=self.dim_l,
-                                    layer_list=self.config.model.dist_hidden_layer_lst,
-                                    activation_str=self.config.model.activation)
-            
-            self.fc_var = self._get_MLP(input_dim=self.dim_a,
-                                    output_dim=self.dim_l,
-                                    layer_list=self.config.model.dist_hidden_layer_lst,
-                                    activation_str=self.config.model.activation)
-
     def _set_dims_and_scales(self):
         '''
         Sets the observation (y), manifold latent factor (a) and dynamic latent factor (x)
@@ -1380,8 +1325,6 @@ class SharedDFINE(nn.Module):
         self.dim_x = self.config.model.dim_x
         self.dim_x_behv = self.config.model.dim_x_behv
         self.dim_a_behv = self.config.model.dim_a_behv
-        if self.config.model.use_variation:
-            self.dim_l = self.config.model.dim_l
 
         if self.config.model.supervise_behv:
             self.dim_behv = len(self.config.model.which_behv_dims)
@@ -1433,7 +1376,7 @@ class SharedDFINE(nn.Module):
 
     def forward(self, y, ldm, mapper, mask=None, ldm_individual=None, normalize=False):
         '''
-        Forward pass for DFINE Model
+        Forward pass for CANDY Model
 
         Parameters: 
         ------------
@@ -1478,12 +1421,6 @@ class SharedDFINE(nn.Module):
 
         # Get the encoded low-dimensional manifold factors (project via nonlinear manifold embedding) -> the outputs are (num_seq * num_steps, dim_a)
         a_hat = self.encoder(y.view(-1, self.dim_y))
-        if self.config.model.use_variation:
-            dist_mu  = self.fc_mu(a_hat)
-            dist_logvar = self.fc_var(a_hat)
-            z = self._reparameterize(dist_mu, dist_logvar)
-            #ldm.mu_0.data = z.clone()
-            a_hat = z
 
         # Reshape the manifold latent factors back into 3D structure (num_seq, num_steps, dim_a)
         a_hat = a_hat.view(-1, num_steps, self.dim_a)
@@ -1573,9 +1510,6 @@ class SharedDFINE(nn.Module):
                           Lambda_pred=Lambda_pred, Lambda_filter=Lambda_filter, Lambda_smooth=Lambda_smooth,
                           y_hat=y_hat, y_pred=y_pred, y_filter=y_filter, y_smooth=y_smooth, 
                           A=A, C=C, behv_hat=behv_hat)
-        if self.config.model.use_variation:
-            model_vars['dist_mu'] = dist_mu 
-            model_vars['dist_logvar'] = dist_logvar
         return model_vars
 
 
@@ -1660,7 +1594,7 @@ class SharedDFINE(nn.Module):
             - steps_{k}_mse: torch.Tensor, shape: (), {k}-step ahead predicted masked MSE, k's are determined by config.loss.steps_ahead
             - model_loss: torch.Tensor, shape: (), Negative of sum of all steps_{k}_mse
             - behv_loss: torch.Tensor, shape: (), Behavior reconstruction loss, 0 if model is unsupervised
-            - reg_loss: torch.Tensor, shape: (), L2 Regularization loss for DFINE encoder and decoder weights
+            - reg_loss: torch.Tensor, shape: (), L2 Regularization loss for CANDY encoder and decoder weights
             - total_loss: torch.Tensor, shape: (), Sum of model_loss, behv_loss and reg_loss
         '''
 
@@ -1714,7 +1648,7 @@ class SharedDFINE(nn.Module):
 
 class LDM(nn.Module):
     '''
-    Linear Dynamical Model backbone for DFINE. This module is used for smoothing and filtering
+    Linear Dynamical Model backbone for CANDY. This module is used for smoothing and filtering
     given a batch of trials/segments/time-series. 
 
     LDM equations are as follows:
@@ -2136,7 +2070,7 @@ class LDM(nn.Module):
 
 class MLP(nn.Module):
     '''
-    MLP Module for DFINE encoder and decoder in addition to the mapper to behavior for supervised DFINE. 
+    MLP Module for CANDY encoder and decoder in addition to the mapper to behavior for supervised CANDY. 
     Encoder encodes the high-dimensional neural observations into low-dimensional manifold latent factors space 
     and decoder decodes the manifold latent factors into high-dimensional neural observations.
     '''

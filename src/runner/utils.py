@@ -25,10 +25,10 @@ def init_dataloaderN(train_dataset, val_dataset, test_dataset, dataset_info, **p
     obs_dim_lst = []
     data_dict = {'train_loader': [], 'valid_loader': [], 'test_loader': [], 
                  'train_dataset': [], 'valid_dataset': [], 'test_dataset': []}
-    for i, (subject_id, session_id) in enumerate(dataset_info.keys()):
-        train_dataset_one = train_dataset[(subject_id, session_id)]
-        val_dataset_one   = val_dataset[(subject_id, session_id)]
-        test_dataset_one  = test_dataset[(subject_id, session_id)]
+    for i, sess_name in enumerate(dataset_info.keys()):
+        train_dataset_one = train_dataset[sess_name]
+        val_dataset_one   = val_dataset[sess_name]
+        test_dataset_one  = test_dataset[sess_name]
         
         if model_type in ['CANDY']:
             train_dataset_one = load_rnndataset(train_dataset_one, frac=data_params['train_frac'] if 'train_frac' in data_params else 1.0)
@@ -48,7 +48,7 @@ def init_dataloaderN(train_dataset, val_dataset, test_dataset, dataset_info, **p
         data_dict['train_dataset'].append(train_dataset_one)
         data_dict['valid_dataset'].append(val_dataset_one)
         data_dict['test_dataset'].append(test_dataset_one)
-        obs_dim_lst.append(dataset_info[(subject_id, session_id)]['obs_dim'])
+        obs_dim_lst.append(dataset_info[sess_name]['obs_dim'])
     return data_dict, obs_dim_lst
 
 def get_latest_checkpoint_number(ckpt_save_dir):
@@ -75,8 +75,8 @@ def get_latest_checkpoint_number(ckpt_save_dir):
 
 def init_csv(dataset_info): 
     columns = ["model_name", "data_seed", "model_seed"]
-    for i, (subject_id, session_id) in enumerate(dataset_info.keys()):
-        columns += [f'{subject_id}_{session_id}']
+    for i, sess_name in enumerate(dataset_info.keys()):
+        columns += [f'{sess_name}']
     # Define sub-columns for each dataset column
     sub_columns = [
         "recon_MSE", "recon_MAE", "recon_R2", "recon_Corr",

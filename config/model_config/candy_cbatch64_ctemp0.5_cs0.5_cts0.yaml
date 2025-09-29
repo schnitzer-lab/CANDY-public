@@ -17,10 +17,6 @@ model_params:
   contrastive_scale: 0.5
   contrastive_time_scaler: 0.0
   contrastive_num_batch: 64
-  use_variation: False
-  kl_scale: !!float 1e-5
-  dim_l: 8
-  dist_hidden_layer_lst: [50]
   batch_size: 32
 train_params:
   do_full_inference: True
