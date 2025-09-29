@@ -40,10 +40,7 @@ class CANDYDynamics(sharedDynamics):
         self.config.seed = kwargs.pop('seed', 0)
         self.config.model.dim_a = latent_dim
         self.config.model.dim_x = latent_dim
-        self.config.model.dim_x_behv = kwargs.pop('dim_x_behv', self.config.model.dim_x_behv)
         self.config.model.which_behv_dims =  kwargs.pop('which_behv_dims', self.config.model.which_behv_dims)
-        ## FIXME: currently force to set dim_a_behv = dim_x_behv
-        self.config.model.dim_a_behv = self.config.model.dim_x_behv
         self.config.model.hidden_layer_list = kwargs.pop('hidden_layer_list', self.config.model.hidden_layer_list)
         self.config.model.supervise_behv = kwargs.pop('supervise_behv', self.config.model.supervise_behv)
         self.config.model.contrastive = kwargs.pop('contrastive', self.config.model.contrastive)
@@ -67,8 +64,6 @@ class CANDYDynamics(sharedDynamics):
         self.device = 'cpu' if self.config.device == 'cpu' or not torch.cuda.is_available() else 'cuda:0' 
 
         self._set_dims_and_scales()
-        assert self.dim_x >= self.dim_x_behv, 'dim_x_behv should be smaller than dim_x'
-        assert self.dim_a >= self.dim_a_behv, 'dim_a_behv should be smaller than dim_a'
 
         # Checkpoint and plot save directories, create directories if they don't exist
         self.ckpt_save_dir = os.path.join(self.config.model.save_dir, 'ckpts'); os.makedirs(self.ckpt_save_dir, exist_ok=True)
@@ -76,26 +71,14 @@ class CANDYDynamics(sharedDynamics):
         self.start_epoch = kwargs.pop('start_epoch', 0)
 
         # Define shared LDM
-        A, C, W_log_diag, R_log_diag, mu_0, Lambda_0 = self._init_ldm_parameters(self.dim_x_behv, self.dim_a_behv)
-        self.ldm = LDM(dim_x=self.dim_x_behv, dim_a=self.dim_a_behv, 
+        A, C, W_log_diag, R_log_diag, mu_0, Lambda_0 = self._init_ldm_parameters(self.dim_x, self.dim_a)
+        self.ldm = LDM(dim_x=self.dim_x, dim_a=self.dim_a, 
                        A=A, C=C, 
                        W_log_diag=W_log_diag, R_log_diag=R_log_diag,
                        mu_0=mu_0, Lambda_0=Lambda_0,
                        is_W_trainable=self.config.model.is_W_trainable,
                        is_R_trainable=self.config.model.is_R_trainable)
         self.ldm.to(self.device)
-
-        self.ldm_individual_list = list()
-        for i in range(self.n_subjects):
-            A, C, W_log_diag, R_log_diag, mu_0, Lambda_0 = self._init_ldm_parameters(self.dim_x-self.dim_x_behv, self.dim_a-self.dim_a_behv)
-            ldm_individual = LDM(dim_x=self.dim_x-self.dim_x_behv, dim_a=self.dim_a-self.dim_a_behv, 
-                                A=A, C=C, 
-                                W_log_diag=W_log_diag, R_log_diag=R_log_diag,
-                                mu_0=mu_0, Lambda_0=Lambda_0,
-                                is_W_trainable=self.config.model.is_W_trainable,
-                                is_R_trainable=self.config.model.is_R_trainable)
-            ldm_individual.to(self.device)
-            self.ldm_individual_list.append(ldm_individual)
 
         self.candy_list = list()
         for i in range(self.n_subjects):
@@ -106,7 +89,7 @@ class CANDYDynamics(sharedDynamics):
 
         # Define shared behavioral decoder
         if self.config.model.supervise_behv:
-            self.mapper = self._get_MLP(input_dim=self.dim_x_behv, 
+            self.mapper = self._get_MLP(input_dim=self.dim_x, 
                                         output_dim=self.dim_behv, 
                                         layer_list=self.config.model.hidden_layer_list_mapper, 
                                         activation_str=self.config.model.activation_mapper)
@@ -129,9 +112,8 @@ class CANDYDynamics(sharedDynamics):
 
         candy_params = sum([list(candy.parameters()) for candy in self.candy_list], list())
         ldm_params = list(self.ldm.parameters())
-        ldm_individual_params = sum([list(ldm_individual.parameters()) for ldm_individual in self.ldm_individual_list], list())
         mapper_params = list(self.mapper.parameters()) if self.mapper is not None else []
-        params = candy_params + ldm_params + mapper_params + ldm_individual_params
+        params = candy_params + ldm_params + mapper_params
         self.optimizer = self._get_optimizer(params)
         self.lr_scheduler = self._get_lr_scheduler()
 
@@ -169,8 +151,6 @@ class CANDYDynamics(sharedDynamics):
         self.dim_y = self.config.model.dim_y
         self.dim_a = self.config.model.dim_a
         self.dim_x = self.config.model.dim_x
-        self.dim_x_behv = self.config.model.dim_x_behv
-        self.dim_a_behv = self.config.model.dim_a_behv
 
         if self.config.model.supervise_behv:
             self.dim_behv = len(self.config.model.which_behv_dims)
@@ -322,7 +302,7 @@ class CANDYDynamics(sharedDynamics):
         return scheduler
 
 
-    def _load_ckpt(self, candy_list, ldm, ldm_individual_list, mapper, optimizer, lr_scheduler=None):
+    def _load_ckpt(self, candy_list, ldm, mapper, optimizer, lr_scheduler=None):
         '''
         Loads the checkpoint specified in the config by config.load.ckpt.
 
@@ -380,14 +360,11 @@ class CANDYDynamics(sharedDynamics):
             self.logger.error('Given architecture in config does not match the architecture of given checkpoint!')
             assert False, ''
 
-        for i in range(len(ldm_individual_list)):
-            ldm_individual_list[i].load_state_dict(ckpt['ldm_individual_state_dict_list'][i])
-        
         self.logger.info(f'Checkpoint succesfully loaded from {load_path}!')
-        return candy_list, ldm, ldm_individual_list, mapper, optimizer, lr_scheduler
+        return candy_list, ldm, mapper, optimizer, lr_scheduler
 
 
-    def _save_ckpt(self, epoch, candy_list, ldm, ldm_individual_list, mapper, optimizer, lr_scheduler=None):
+    def _save_ckpt(self, epoch, candy_list, ldm, mapper, optimizer, lr_scheduler=None):
         '''
         Saves the checkpoint under ckpt_save_dir (see __init__) with filename {epoch}_ckpt.pth
 
@@ -406,7 +383,6 @@ class CANDYDynamics(sharedDynamics):
             torch.save({
                         'candy_state_dict_list': [candy.state_dict() for candy in candy_list],
                         'ldm_state_dict': ldm.state_dict(),
-                        'ldm_individual_state_dict_list': [ldm_individual.state_dict() for ldm_individual in ldm_individual_list],
                         'mapper_state_dict': mapper.state_dict() if mapper is not None else None,
                         'optimizer': optimizer.state_dict(),
                         'lr_scheduler': lr_scheduler.state_dict(),
@@ -416,7 +392,6 @@ class CANDYDynamics(sharedDynamics):
             torch.save({
                         'candy_state_dict_list': [candy.state_dict() for candy in candy_list],
                         'ldm_state_dict': ldm.state_dict(),
-                        'ldm_individual_state_dict_list': [ldm_individual.state_dict() for ldm_individual in ldm_individual_list],
                         'mapper_state_dict': mapper.state_dict() if mapper is not None else None,
                         'optimizer': optimizer.state_dict(),
                         'epoch': epoch
@@ -618,7 +593,7 @@ class CANDYDynamics(sharedDynamics):
                 y_batch, behv_batch, mask_batch = batch
 
                 # Perform forward pass and compute loss
-                model_vars = self.candy_list[i_sub](y=y_batch, ldm=self.ldm, mapper=self.mapper, mask=mask_batch, ldm_individual=self.ldm_individual_list[i_sub], normalize=epoch<1)
+                model_vars = self.candy_list[i_sub](y=y_batch, ldm=self.ldm, mapper=self.mapper, mask=mask_batch, normalize=epoch<1)
 
                 loss, loss_dict = self.candy_list[i_sub].compute_loss(y=y_batch, 
                                                         model_vars=model_vars, 
@@ -633,7 +608,6 @@ class CANDYDynamics(sharedDynamics):
 
                 # only use the latent behavior dimensions for contrastive learning
                 a_hat = torch.cat(a_hat, dim=0)
-                a_hat = a_hat[:, :self.dim_a_behv]
                 subject_list.extend([i_sub]*a_hat.shape[0])
                 a_hat_list.append(a_hat)
 
@@ -695,7 +669,6 @@ class CANDYDynamics(sharedDynamics):
             self._save_ckpt(epoch=epoch, 
                             candy_list=self.candy_list, 
                             ldm=self.ldm,
-                            ldm_individual_list=self.ldm_individual_list,
                             mapper=self.mapper,
                             optimizer=self.optimizer, 
                             lr_scheduler=self.lr_scheduler)
@@ -771,7 +744,7 @@ class CANDYDynamics(sharedDynamics):
                     y_batch, behv_batch, mask_batch = batch
 
                     # Perform forward pass and compute loss
-                    model_vars = self.candy_list[i_sub](y=y_batch, ldm=self.ldm, mapper=self.mapper, mask=mask_batch, ldm_individual=self.ldm_individual_list[i_sub], normalize=False)
+                    model_vars = self.candy_list[i_sub](y=y_batch, ldm=self.ldm, mapper=self.mapper, mask=mask_batch, normalize=False)
 
                     loss, loss_dict = self.candy_list[i_sub].compute_loss(y=y_batch, 
                                                             model_vars=model_vars, 
@@ -788,7 +761,6 @@ class CANDYDynamics(sharedDynamics):
 
                     # only use the latent behavior dimensions for contrastive learning
                     a_hat = torch.cat(a_hat, dim=0)
-                    a_hat = a_hat[:, :self.dim_a_behv]
                     subject_list.extend([i_sub]*a_hat.shape[0])
                     a_hat_list.append(a_hat)
 
@@ -832,7 +804,6 @@ class CANDYDynamics(sharedDynamics):
                 self._save_ckpt(epoch='best_loss', 
                                 candy_list=self.candy_list,
                                 ldm=self.ldm,
-                                ldm_individual_list=self.ldm_individual_list,
                                 mapper=self.mapper,
                                 optimizer=self.optimizer, 
                                 lr_scheduler=self.lr_scheduler)
@@ -843,7 +814,6 @@ class CANDYDynamics(sharedDynamics):
                     self._save_ckpt(epoch='best_behv_loss', 
                                     candy_list=self.candy_list,
                                     ldm=self.ldm,
-                                    ldm_individual_list=self.ldm_individual_list,
                                     mapper=self.mapper,
                                     optimizer=self.optimizer, 
                                     lr_scheduler=self.lr_scheduler)
@@ -872,7 +842,7 @@ class CANDYDynamics(sharedDynamics):
 
         encoding_dict_list = list()
         with torch.no_grad():
-            for candy, loader, ldm_individual in zip(self.candy_list, loader_list, self.ldm_individual_list):
+            for candy, loader in zip(self.candy_list, loader_list):
                 candy.eval()
 
                 ############################################################################ BATCH INFERENCE ############################################################################
@@ -915,7 +885,7 @@ class CANDYDynamics(sharedDynamics):
                         batch = (y_batch, behv_batch, mask_batch, type_batch)
                         batch = carry_to_device(data=list(batch), device=self.device)
                         y_batch, behv_batch, mask_batch, type_batch = batch
-                        model_vars = candy(y=y_batch, mask=mask_batch, ldm=self.ldm, mapper=self.mapper, ldm_individual=ldm_individual, normalize=False)
+                        model_vars = candy(y=y_batch, mask=mask_batch, ldm=self.ldm, mapper=self.mapper, normalize=False)
 
                         # Append the inference variables to the empty lists created in the beginning
                         encoding_dict['x_pred'].append(model_vars['x_pred'].detach().cpu())
@@ -1005,7 +975,7 @@ class CANDYDynamics(sharedDynamics):
                         # record trials type
                         encoding_dict_full_inference['ttype'] = encoding_dict['ttype']
                         
-                        model_vars = candy(y=encoding_dict_full_inference['y'].to(self.device), mask=encoding_dict_full_inference['mask'].to(self.device), ldm=self.ldm, mapper=self.mapper, ldm_individual=ldm_individual, normalize=False)
+                        model_vars = candy(y=encoding_dict_full_inference['y'].to(self.device), mask=encoding_dict_full_inference['mask'].to(self.device), ldm=self.ldm, mapper=self.mapper, normalize=False)
 
                         # Append the inference variables to the empty lists created in the beginning
                         encoding_dict_full_inference['x_pred'] = model_vars['x_pred'].detach().cpu()
@@ -1066,9 +1036,8 @@ class CANDYDynamics(sharedDynamics):
 
         # Load ckpt if asked, model with best validation model loss can be loaded as well, which is saved with name 'best_loss_ckpt.pth'
         if (isinstance(self.config.load.ckpt, int) and self.config.load.ckpt > 1) or isinstance(self.config.load.ckpt, str): 
-            self.candy_list, self.ldm, self.ldm_individual_list, self.mapper, self.optimizer, self.lr_scheduler = self._load_ckpt(candy_list=self.candy_list,
+            self.candy_list, self.ldm, self.mapper, self.optimizer, self.lr_scheduler = self._load_ckpt(candy_list=self.candy_list,
                                                                             ldm=self.ldm,
-                                                                            ldm_individual_list=self.ldm_individual_list,
                                                                             mapper=self.mapper,
                                                                             optimizer=self.optimizer,
                                                                             lr_scheduler=self.lr_scheduler)
@@ -1246,8 +1215,6 @@ class CANDY(nn.Module):
         self.dim_y = self.config.model.dim_y
         self.dim_a = self.config.model.dim_a
         self.dim_x = self.config.model.dim_x
-        self.dim_x_behv = self.config.model.dim_x_behv
-        self.dim_a_behv = self.config.model.dim_a_behv
 
         if self.config.model.supervise_behv:
             self.dim_behv = len(self.config.model.which_behv_dims)
@@ -1297,7 +1264,7 @@ class CANDY(nn.Module):
         eps = torch.randn_like(std)
         return eps * std + mu
 
-    def forward(self, y, ldm, mapper, mask=None, ldm_individual=None, normalize=False):
+    def forward(self, y, ldm, mapper, mask=None, normalize=False):
         '''
         Forward pass for CANDY Model
 
@@ -1347,63 +1314,30 @@ class CANDY(nn.Module):
 
         # Reshape the manifold latent factors back into 3D structure (num_seq, num_steps, dim_a)
         a_hat = a_hat.view(-1, num_steps, self.dim_a)
-        a_hat_behv = a_hat[..., :self.dim_a_behv]
-        a_hat_individual = a_hat[..., self.dim_a_behv:]
 
         # shared LDM for extracting behavior-relevant dynamics
         # Run LDM to infer filtered and smoothed dynamic latent factors
-        x_pred_behv, x_filter_behv, x_smooth_behv, Lambda_pred_behv, Lambda_filter_behv, Lambda_smooth_behv = ldm(a=a_hat_behv, mask=mask, do_smoothing=True, normalize=normalize)
-        A_behv = ldm.A.repeat(num_seq, num_steps, 1, 1)
-        C_behv = ldm.C.repeat(num_seq, num_steps, 1, 1)
-        a_pred_behv = (C_behv @ x_pred_behv.unsqueeze(dim=-1)).squeeze(dim=-1) #  (num_seq, num_steps, dim_a, dim_x) x (num_seq, num_steps, dim_x, 1) --> (num_seq, num_steps, dim_a)
-        a_filter_behv = (C_behv @ x_filter_behv.unsqueeze(dim=-1)).squeeze(dim=-1) #  (num_seq, num_steps, dim_a, dim_x) x (num_seq, num_steps, dim_x, 1) --> (num_seq, num_steps, dim_a)
-        a_smooth_behv = (C_behv @ x_smooth_behv.unsqueeze(dim=-1)).squeeze(dim=-1) #  (num_seq, num_steps, dim_a, dim_x) x (num_seq, num_steps, dim_x, 1) --> (num_seq, num_steps, dim_a)
-        
+        x_pred, x_filter, x_smooth, Lambda_pred, Lambda_filter, Lambda_smooth = ldm(a=a_hat, mask=mask, do_smoothing=True, normalize=normalize)
+        A = ldm.A.repeat(num_seq, num_steps, 1, 1)
+        C = ldm.C.repeat(num_seq, num_steps, 1, 1)
+        a_pred = (C @ x_pred.unsqueeze(dim=-1)).squeeze(dim=-1) #  (num_seq, num_steps, dim_a, dim_x) x (num_seq, num_steps, dim_x, 1) --> (num_seq, num_steps, dim_a)
+        a_filter = (C @ x_filter.unsqueeze(dim=-1)).squeeze(dim=-1) #  (num_seq, num_steps, dim_a, dim_x) x (num_seq, num_steps, dim_x, 1) --> (num_seq, num_steps, dim_a)
+        a_smooth = (C @ x_smooth.unsqueeze(dim=-1)).squeeze(dim=-1) #  (num_seq, num_steps, dim_a, dim_x) x (num_seq, num_steps, dim_x, 1) --> (num_seq, num_steps, dim_a)
+
         # Remove the last timestep of predictions since it's T+1|T, which is not of our interest
-        x_pred_behv = x_pred_behv[:, :-1, :]
-        Lambda_pred_behv = Lambda_pred_behv[:, :-1, :, :]
-        a_pred_behv = a_pred_behv[:, :-1, :]
+        x_pred = x_pred[:, :-1, :]
+        Lambda_pred = Lambda_pred[:, :-1, :, :]
+        a_pred = a_pred[:, :-1, :]
 
         # Supervise a_seq or a_smooth to behavior if requested -> behv_hat shape: (num_seq, num_steps, dim_behv)
         if self.config.model.supervise_behv:
             if self.config.model.behv_from_smooth:
-                behv_hat = mapper(a_smooth_behv.view(-1, self.dim_a_behv))
+                behv_hat = mapper(a_smooth.view(-1, self.dim_a))
             else:
-                behv_hat = mapper(a_hat_behv.view(-1, self.dim_a_behv))
+                behv_hat = mapper(a_hat.view(-1, self.dim_a))
             behv_hat = behv_hat.view(-1, num_steps, self.dim_behv)
         else:
             behv_hat = None
-
-        # individual LDM for extracting individual-specific dynamics
-        # Run LDM to infer filtered and smoothed dynamic latent factors
-        x_pred_individual, x_filter_individual, x_smooth_individual, Lambda_pred_individual, Lambda_filter_individual, Lambda_smooth_individual = ldm_individual(a=a_hat_individual, mask=mask, do_smoothing=True)
-        A_individual = ldm_individual.A.repeat(num_seq, num_steps, 1, 1)
-        C_individual = ldm_individual.C.repeat(num_seq, num_steps, 1, 1)
-        a_pred_individual = (C_individual @ x_pred_individual.unsqueeze(dim=-1)).squeeze(dim=-1) #  (num_seq, num_steps, dim_a, dim_x) x (num_seq, num_steps, dim_x, 1) --> (num_seq, num_steps, dim_a)
-        a_filter_individual = (C_individual @ x_filter_individual.unsqueeze(dim=-1)).squeeze(dim=-1) #  (num_seq, num_steps, dim_a, dim_x) x (num_seq, num_steps, dim_x, 1) --> (num_seq, num_steps, dim_a)
-        a_smooth_individual = (C_individual @ x_smooth_individual.unsqueeze(dim=-1)).squeeze(dim=-1) #  (num_seq, num_steps, dim_a, dim_x) x (num_seq, num_steps, dim_x, 1) --> (num_seq, num_steps, dim_a)
-
-        # Remove the last timestep of predictions since it's T+1|T, which is not of our interest
-        x_pred_individual = x_pred_individual[:, :-1, :]
-        Lambda_pred_individual = Lambda_pred_individual[:, :-1, :, :]
-        a_pred_individual = a_pred_individual[:, :-1, :]
-
-        # concatenate the behavior-relevant and individual-specific dynamics
-        x_pred = torch.cat([x_pred_behv, x_pred_individual], dim=-1)
-        x_filter = torch.cat([x_filter_behv, x_filter_individual], dim=-1)
-        x_smooth = torch.cat([x_smooth_behv, x_smooth_individual], dim=-1)
-        a_pred = torch.cat([a_pred_behv, a_pred_individual], dim=-1)
-        a_filter = torch.cat([a_filter_behv, a_filter_individual], dim=-1)
-        a_smooth = torch.cat([a_smooth_behv, a_smooth_individual], dim=-1)
-        Lambda_pred = torch.zeros((Lambda_pred_behv.shape[0], Lambda_pred_behv.shape[1], self.dim_x, self.dim_x), device=y.device, dtype=torch.float32)
-        Lambda_pred[..., :self.dim_x_behv, :self.dim_x_behv] = Lambda_pred_behv
-        Lambda_pred[..., self.dim_x_behv:, self.dim_x_behv:] = Lambda_pred_individual
-        Lambda_filter = torch.zeros((Lambda_filter_behv.shape[0], Lambda_filter_behv.shape[1], self.dim_x, self.dim_x), device=y.device, dtype=torch.float32)
-        Lambda_filter[..., :self.dim_x_behv, :self.dim_x_behv] = Lambda_filter_behv
-        Lambda_filter[..., self.dim_x_behv:, self.dim_x_behv:] = Lambda_filter_individual
-        Lambda_smooth = torch.zeros((Lambda_smooth_behv.shape[0], Lambda_smooth_behv.shape[1], self.dim_x, self.dim_x), device=y.device, dtype=torch.float32)
-        Lambda_smooth[..., :self.dim_x_behv, :self.dim_x_behv] = Lambda_smooth_behv
-        Lambda_smooth[..., self.dim_x_behv:, self.dim_x_behv:] = Lambda_smooth_individual
 
         # Get filtered and smoothed estimates of neural observations. To perform k-step-ahead prediction, 
         # get_k_step_ahead_prediction(...) function should be called after the forward pass. 
@@ -1416,16 +1350,6 @@ class CANDY(nn.Module):
         y_pred = y_pred.view(num_seq, -1, self.dim_y)
         y_filter = y_filter.view(num_seq, -1, self.dim_y)
         y_smooth = y_smooth.view(num_seq, -1, self.dim_y)
-
-        # combine A_behv and A_individual whose shape is n*n to a 2n*2n matrix
-        A = torch.zeros((num_seq, num_steps, self.dim_x, self.dim_x), device=y.device, dtype=torch.float32)
-        A[:, :, :self.dim_x_behv, :self.dim_x_behv] = A_behv
-        A[:, :, self.dim_x_behv:, self.dim_x_behv:] = A_individual
-
-        # combine C_behv and C_individual whose shape is m*n to a m*2n matrix
-        C = torch.zeros((num_seq, num_steps, self.dim_a, self.dim_x), device=y.device, dtype=torch.float32)
-        C[:, :, :self.dim_a_behv, :self.dim_x_behv] = C_behv
-        C[:, :, self.dim_a_behv:, self.dim_x_behv:] = C_individual
 
         # Dump inferrred latents, predictions and reconstructions to a dictionary
         model_vars = dict(a_hat=a_hat, a_pred=a_pred, a_filter=a_filter, a_smooth=a_smooth, 

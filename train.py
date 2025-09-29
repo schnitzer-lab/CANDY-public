@@ -67,11 +67,6 @@ def main(args):
             params['model_params']['supervise_behv'] = False 
         if args.contrastive_off:
             params['model_params']['contrastive'] = False
-        if args.dim_x_behv is not None:
-            assert args.dim_x_behv <= latent_dim, 'dim_x_behv need to smaller or equal to latent_dim.'
-            params['model_params']['dim_x_behv'] = args.dim_x_behv
-        else:
-            params['model_params']['dim_x_behv'] = latent_dim
         df_train, df_test = runnerN(data_path_lst, params)
     else:
         raise Exception('model type is not supported!')
@@ -101,8 +96,6 @@ if __name__ == '__main__':
                         help='turn off the behavior supervision.')
     parser.add_argument('--contrastive_off', action='store_true',
                         help='turn off contrastive learning.')
-    parser.add_argument('--dim_x_behv', type=int, default=None, 
-                        help='Optional dimension for behavior (default: optional).')
     parser.add_argument('--train_frac', type=float, default=1.0, 
                         help='Actual fraction of training data to use (default: 1.0). Useful for comparison of performance as a function of training data size while fixing the testing data.')
     parser.add_argument('--not_save_latent', action='store_true',

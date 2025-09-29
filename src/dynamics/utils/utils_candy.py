@@ -1,10 +1,3 @@
-'''
-Copyright (c) 2023 University of Southern California
-See full notice in LICENSE.md
-Hamidreza Abbaspourazad*, Eray Erturk* and Maryam M. Shanechi
-Shanechi Lab, University of Southern California
-'''
-
 from yacs.config import CfgNode as CN
 import torch
 import torch.nn as nn
@@ -33,10 +26,8 @@ _config.model.activation = 'leakyrelu'
 _config.model.dim_y = 30
 # Dimensionality of manifold latent factor, a choice higher than dim_y (above) may lead to overfitting
 _config.model.dim_a = 16
-_config.model.dim_a_behv = 8
 # Dimensionality of dynamic latent factor, it's recommended to set it same as dim_a (above), please see Extended Data Fig. 8
 _config.model.dim_x = 16
-_config.model.dim_x_behv = 8
 # Initialization scale of LDM state transition matrix
 _config.model.init_A_scale = 1
 # Initialization scale of LDM observation matrix
@@ -55,14 +46,6 @@ _config.model.is_R_trainable = True
 _config.model.ldm_kernel_initializer = 'default'
 # Initialization type of DFINE encoder and decoder parameters, see nn.get_kernel_initializer_function for detailed definition and supported types
 _config.model.nn_kernel_initializer = 'xavier_normal'
-# Boolean for whether to learn with variational autoencoder
-_config.model.use_variation = False
-# KL scale, the beta term
-_config.model.kl_scale = 1e-3
-# Dimensionality of distribution parameters
-_config.model.dim_l = _config.model.dim_x
-# Hidden layer list for the variational distribution
-_config.model.dist_hidden_layer_lst = []
 # Boolean for whether to learn a behavior-supervised model or not. It must be set to True if supervised model will be trained.  
 _config.model.supervise_behv = False
 # Hidden layer list for the behavior mapper where each element is the number of neurons for that hidden layer of the mapper

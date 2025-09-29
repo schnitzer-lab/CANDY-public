@@ -1,4 +1,3 @@
-# import seaborn as sns
 import os
 import matplotlib.pyplot as plt
 
@@ -108,7 +107,6 @@ def get_model_name(params):
     model_seed = model_args['seed']
     match model_type:
         case 'CANDY':
-            dim_x_behv        = model_args['dim_x_behv']
             lr_init           = model_args['lr_init']
             scale_l2          = model_args['scale_l2']
             supervise_behv    = model_args['supervise_behv']
@@ -124,8 +122,7 @@ def get_model_name(params):
             contrastive_time_scaler = model_args['contrastive_time_scaler']
             contrastive_num_batch   = model_args['contrastive_num_batch']
             batch_size              = model_args['batch_size']
-            # FIXME add contrastive batch size and batch size to the model_name
-            model_name = f"{model_type}-latent_dim{latent_dim}-seed{model_seed}-dim_x_behv{dim_x_behv}" +\
+            model_name = f"{model_type}-latent_dim{latent_dim}-seed{model_seed}" +\
                         f"-contrastive{contrastive}-supbev{supervise_behv}-batch{batch_size}-cbatch{contrastive_num_batch}" #+\
                         # f"-lr_init{lr_init}-scalel2-{scale_l2}-activation{activation}-scalebehvrecons{scale_behv_recons}" +\
                         # f"-stepsahead{'_'.join([str(s) for s in steps_ahead])}-hiddenlayers{'_'.join([str(l) for l in hidden_layer_lst])}"
