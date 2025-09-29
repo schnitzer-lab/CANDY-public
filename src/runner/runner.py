@@ -150,11 +150,11 @@ def runnerN(data_path_lst, params):
             model.config['load']['ckpt'] = ckpt_num
             print(f'[INFO] checkpoint {ckpt_num} exist. Start from this epoch and continue training.')
             model.config.load.resume_train = True
-            model._load_ckpt(model.dfine_list, model.ldm, model.ldm_individual_list, model.mapper, model.subject_discriminator, model.optimizer)
+            model._load_ckpt(model.dfine_list, model.ldm, model.ldm_individual_list, model.mapper, model.optimizer)
 
         model.fit(train_loader, val_loader, **train_params)
         model.config['load']['ckpt'] = 'best_loss'
-        model._load_ckpt(model.dfine_list, model.ldm, model.ldm_individual_list, model.mapper, model.subject_discriminator, model.optimizer)
+        model._load_ckpt(model.dfine_list, model.ldm, model.ldm_individual_list, model.mapper, model.optimizer)
         data_orig_train, train_recon, z_hat_train_lst, a_hat_train_lst, behv_train_lst, behv_hat_train_lst, trials_type_train_lst = model.transform(train_loader)
         data_orig_valid, valid_recon, z_hat_valid_lst, a_hat_valid_lst, behv_valid_lst, behv_hat_valid_lst, trials_type_valid_lst = model.transform(val_loader)
         data_orig_test, test_recon, z_hat_test_lst, a_hat_test_lst, behv_test_lst, behv_hat_test_lst, trials_type_test_lst = model.transform(test_loader)
