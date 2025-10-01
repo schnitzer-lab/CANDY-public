@@ -78,7 +78,7 @@ if __name__ == '__main__':
                        help='Brain areas [mouse wheel] or Task type [monkey] (default: None).')
     parser.add_argument('--data_folder', type=str, default='G:\My Drive\Research',
                         help='Data parent folder (default: G:\My Drive\Research).')
-    parser.add_argument('--data_config', type=str, default='../config/data_config/mouse_wheel.yaml',
+    parser.add_argument('--data_config', type=str, default='./config/data_config/mouse_wheel.yaml',
                         help='Dataset configuration path (default: mouse_wheel.yaml)')
     parser.add_argument('--latent_dim', type=int, default=8,
                        help='Latent subspace dimension (default: 8).')
@@ -88,7 +88,7 @@ if __name__ == '__main__':
                        help='Model type (default: CANDY).')
     parser.add_argument('--model_config',type=str, required=True,
                         help='Model type corresponding yaml configuration file path.')
-    parser.add_argument('--decoder_config', type=str, required=True, 
+    parser.add_argument('--decoder_config', type=str, default='./config/decoder_config/linear.yaml', 
                         help='behavior decoder yaml configuration file path.')
     parser.add_argument('--save_path', type=str, default='./test',
                        help='Saving parent folder path (default: ./test).')
@@ -100,10 +100,6 @@ if __name__ == '__main__':
                         help='Actual fraction of training data to use (default: 1.0). Useful for comparison of performance as a function of training data size while fixing the testing data.')
     parser.add_argument('--not_save_latent', action='store_true',
                         help='turn off latent save.')
-    parser.add_argument('--ctemp', type=float, default=None, 
-                        help='Contrastive temperature.')
-    parser.add_argument('--cscale', type=float, default=None, 
-                        help='Contrastive scale')
 
 
     args = parser.parse_args()

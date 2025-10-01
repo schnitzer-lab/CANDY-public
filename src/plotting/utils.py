@@ -28,13 +28,13 @@ def get_vis_data(z_hat_train_dict, z_hat_test_dict, train_dataset, test_dataset,
     dataset_test_trials_indi = []
     dataset_test_behvs = []
     files_names = []
-    for i, (subject_id, session_id) in enumerate(dataset_info):
-        z_hat_train = z_hat_train_dict[(subject_id, session_id)]
-        z_hat_test  = z_hat_test_dict[(subject_id, session_id)]
-        behv_train  = train_dataset[(subject_id, session_id)]['behavior_data']
-        behv_test   = test_dataset[(subject_id, session_id)]['behavior_data']
-        ttype_train = train_dataset[(subject_id, session_id)]['trials_type']
-        ttype_test  = test_dataset[(subject_id, session_id)]['trials_type']
+    for i, sess_name in enumerate(dataset_info):
+        z_hat_train = z_hat_train_dict[sess_name]
+        z_hat_test  = z_hat_test_dict[sess_name]
+        behv_train  = train_dataset[sess_name]['behavior_data']
+        behv_test   = test_dataset[sess_name]['behavior_data']
+        ttype_train = train_dataset[sess_name]['trials_type']
+        ttype_test  = test_dataset[sess_name]['trials_type']
 
         z_hat_train_lst_all += z_hat_train
         z_hat_test_lst_all  += z_hat_test
@@ -46,7 +46,7 @@ def get_vis_data(z_hat_train_dict, z_hat_test_dict, train_dataset, test_dataset,
         dataset_test_trials_indi += [i] * len(ttype_test)
         dataset_test_behvs += behv_test
 
-        files_names += [(subject_id, session_id)]
+        files_names += [sess_name]
 
     # Step 1: stack the z_hat_lst all
     z_hat_train_lst_all_stack = np.vstack(z_hat_train_lst_all)
