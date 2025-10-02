@@ -62,14 +62,11 @@ def main(args):
     }
     os.makedirs(save_params['save_path'], exist_ok=True)
 
-    if model_type in ['CANDY']:
-        if args.behv_sup_off:
-            params['model_params']['supervise_behv'] = False 
-        if args.contrastive_off:
-            params['model_params']['contrastive'] = False
-        df_train, df_test = runnerN(data_path_lst, params)
-    else:
-        raise Exception('model type is not supported!')
+    if args.behv_sup_off:
+        params['model_params']['supervise_behv'] = False 
+    if args.contrastive_off:
+        params['model_params']['contrastive'] = False
+    df_train, df_test = runnerN(data_path_lst, params)
 
 
 if __name__ == '__main__':

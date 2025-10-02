@@ -100,7 +100,7 @@ _config.train.valid_step = 1
 # Number of steps to save training/validation plots
 _config.train.plot_save_steps = 50
 # Number of steps to print training/validation logs
-_config.train.print_log_steps = 1
+_config.train.print_log_steps = 10
 
 ## Dump loading settings
 _config.load = CN()
