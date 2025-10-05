@@ -75,6 +75,8 @@ if __name__ == '__main__':
     model_params['seed'] = args.model_seed
     model_params['dim_l'] = args.latent_dim
 
+    data_params['train_frac'] = args.train_frac
+
     decoder_params = {'normalize': False, 'tol': 1e-4, 'decoder_type': 'lasso'}
     decoder_train_params = {
                     'params_grid': {'alpha': np.arange(1e-5, 10, 0.1)},

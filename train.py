@@ -3,6 +3,7 @@ import argparse
 
 import numpy as np
 import pandas as pd
+import torch
 
 from src.runner.runner import runnerN
 from src.runner.utils import get_model_name
@@ -66,6 +67,7 @@ def main(args):
         params['model_params']['supervise_behv'] = False 
     if args.contrastive_off:
         params['model_params']['contrastive'] = False
+    
     df_train, df_test = runnerN(data_path_lst, params)
 
 
@@ -97,7 +99,6 @@ if __name__ == '__main__':
                         help='Actual fraction of training data to use (default: 1.0). Useful for comparison of performance as a function of training data size while fixing the testing data.')
     parser.add_argument('--not_save_latent', action='store_true',
                         help='turn off latent save.')
-
 
     args = parser.parse_args()
     main(args)

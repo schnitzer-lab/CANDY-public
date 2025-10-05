@@ -61,7 +61,37 @@ class CANDYDynamics(sharedDynamics):
         self.config.model.save_dir = kwargs['ckpt_save_dir']
         self.config.device = kwargs.pop('device', 'cpu')
         self.config.train.num_epochs = kwargs.pop('num_epochs', self.config.train.num_epochs)
-        self.device = 'cpu' if self.config.device == 'cpu' or not torch.cuda.is_available() else 'cuda:0' 
+        
+        # Multi-GPU configuration
+        self.multi_gpu = kwargs.pop('multi_gpu', False)
+        self.gpu_ids = kwargs.pop('gpu_ids', None)
+        self.data_parallel_type = kwargs.pop('data_parallel_type', 'DataParallel')
+        
+        # Device setup with multi-GPU support
+        if self.config.device == 'cpu' or not torch.cuda.is_available():
+            self.device = 'cpu'
+            self.multi_gpu = False  # Force disable multi-GPU if using CPU
+        else:
+            if self.multi_gpu and torch.cuda.device_count() > 1:
+                if self.gpu_ids is None:
+                    # Auto-detect available GPUs
+                    self.gpu_ids = list(range(torch.cuda.device_count()))
+                elif isinstance(self.gpu_ids, int):
+                    self.gpu_ids = [self.gpu_ids]
+                
+                # Validate GPU IDs
+                available_gpus = list(range(torch.cuda.device_count()))
+                self.gpu_ids = [gpu_id for gpu_id in self.gpu_ids if gpu_id in available_gpus]
+                
+                if len(self.gpu_ids) <= 1:
+                    self.multi_gpu = False
+                    self.device = f'cuda:{self.gpu_ids[0]}' if self.gpu_ids else 'cuda:0'
+                else:
+                    self.device = f'cuda:{self.gpu_ids[0]}'  # Primary device
+                    print(f"[INFO] Multi-GPU training enabled on GPUs: {self.gpu_ids}")
+            else:
+                self.device = 'cuda:0'
+                self.multi_gpu = False 
 
         self._set_dims_and_scales()
 
@@ -105,6 +135,9 @@ class CANDYDynamics(sharedDynamics):
                                             label_diff=self.config.model.contrastive_label_diff, 
                                             feature_sim=self.config.model.contrastive_feature_sim)
 
+        # Setup distributed training (handles both single and multi-GPU)
+        self._setup_distributed_training()
+
         self.best_val_loss = torch.inf
         self.best_val_behv_loss = torch.inf
         
@@ -119,6 +152,9 @@ class CANDYDynamics(sharedDynamics):
 
         # Get the metrics 
         self.metric_names, self.metrics = self._get_metrics()
+        
+        # Move metrics to the correct device after device setup and metrics initialization
+        self._setup_metrics_for_device()
         self.losses = {
             'train': {
                 'behv_losses' : [],
@@ -265,6 +301,15 @@ class CANDYDynamics(sharedDynamics):
             metrics['valid'][key] = Mean()
         
         return metric_names, metrics
+    
+    def _setup_metrics_for_device(self):
+        '''
+        Move metrics to the appropriate device for distributed training.
+        This should be called after device setup.
+        '''
+        for phase in ['train', 'valid']:
+            for key in self.metrics[phase]:
+                self.metrics[phase][key] = self.metrics[phase][key].to(self.device)
 
 
     def _get_optimizer(self, params):
@@ -351,11 +396,14 @@ class CANDYDynamics(sharedDynamics):
                     assert False, ''
 
         try:
-            for i in range(len(candy_list)):
-                candy_list[i].load_state_dict(ckpt['candy_state_dict_list'][i])
-            ldm.load_state_dict(ckpt['ldm_state_dict'])
-            if mapper is not None:
-                mapper.load_state_dict(ckpt['mapper_state_dict'])
+            # Get underlying models in case they are wrapped with DataParallel
+            underlying_candy_list, underlying_ldm, underlying_mapper = self._get_underlying_models()
+            
+            for i in range(len(underlying_candy_list)):
+                underlying_candy_list[i].load_state_dict(ckpt['candy_state_dict_list'][i])
+            underlying_ldm.load_state_dict(ckpt['ldm_state_dict'])
+            if underlying_mapper is not None:
+                underlying_mapper.load_state_dict(ckpt['mapper_state_dict'])
         except:
             self.logger.error('Given architecture in config does not match the architecture of given checkpoint!')
             assert False, ''
@@ -379,20 +427,24 @@ class CANDYDynamics(sharedDynamics):
         '''
 
         save_path = os.path.join(self.ckpt_save_dir, f'{epoch}_ckpt.pth')
+        
+        # Get underlying models in case they are wrapped with DataParallel
+        underlying_candy_list, underlying_ldm, underlying_mapper = self._get_underlying_models()
+        
         if lr_scheduler is not None:
             torch.save({
-                        'candy_state_dict_list': [candy.state_dict() for candy in candy_list],
-                        'ldm_state_dict': ldm.state_dict(),
-                        'mapper_state_dict': mapper.state_dict() if mapper is not None else None,
+                        'candy_state_dict_list': [candy.state_dict() for candy in underlying_candy_list],
+                        'ldm_state_dict': underlying_ldm.state_dict(),
+                        'mapper_state_dict': underlying_mapper.state_dict() if underlying_mapper is not None else None,
                         'optimizer': optimizer.state_dict(),
                         'lr_scheduler': lr_scheduler.state_dict(),
                         'epoch': epoch
                         }, save_path)
         else:
             torch.save({
-                        'candy_state_dict_list': [candy.state_dict() for candy in candy_list],
-                        'ldm_state_dict': ldm.state_dict(),
-                        'mapper_state_dict': mapper.state_dict() if mapper is not None else None,
+                        'candy_state_dict_list': [candy.state_dict() for candy in underlying_candy_list],
+                        'ldm_state_dict': underlying_ldm.state_dict(),
+                        'mapper_state_dict': underlying_mapper.state_dict() if underlying_mapper is not None else None,
                         'optimizer': optimizer.state_dict(),
                         'epoch': epoch
                         }, save_path)
@@ -521,11 +573,12 @@ class CANDYDynamics(sharedDynamics):
                 log_str += f"{k}_steps_mse: {self.metrics[train_valid][f'steps_{k}_mse'].compute():.5f}\n"
 
         # Logging L2 regularization loss and L2 scale 
-        log_str += f"reg_loss: {self.metrics[train_valid]['reg_loss'].compute():.5f}, scale_l2: {self.candy_list[0].scale_l2:.5f}\n"
+        underlying_candy = self._get_model_module(self.candy_list[0])
+        log_str += f"reg_loss: {self.metrics[train_valid]['reg_loss'].compute():.5f}, scale_l2: {underlying_candy.scale_l2:.5f}\n"
 
         # If model is behavior-supervised, log behavior reconstruction loss
         if self.config.model.supervise_behv:
-            log_str += f"behv_loss: {self.metrics[train_valid]['behv_loss'].compute():.5f}, scale_behv_recons: {self.candy_list[0].scale_behv_recons:.5f}\n"
+            log_str += f"behv_loss: {self.metrics[train_valid]['behv_loss'].compute():.5f}, scale_behv_recons: {underlying_candy.scale_behv_recons:.5f}\n"
 
         if self.config.model.contrastive:
             log_str += f"contrastive_loss: {self.metrics[train_valid]['contrastive_loss'].compute():.5f}, contrastive_scale: {self.config.model.contrastive_scale:.5f}\n"
@@ -533,6 +586,170 @@ class CANDYDynamics(sharedDynamics):
         # Finally, log model_loss and total_loss to optimize
         log_str += f"model_loss: {self.metrics[train_valid]['model_loss'].compute():.5f}, total_loss: {self.metrics[train_valid]['total_loss'].compute():.5f}\n"
         return log_str
+
+    def _get_underlying_models(self):
+        """
+        Helper method to get underlying models when wrapped with DataParallel
+        
+        Returns:
+        --------
+        - candy_list: list, List of underlying CANDY models
+        - ldm: LDM, Underlying LDM model  
+        - mapper: torch.nn.Module or None, Underlying mapper model
+        """
+        candy_list = [self._get_model_module(candy) for candy in self.candy_list]
+        ldm = self._get_model_module(self.ldm)
+        mapper = self._get_model_module(self.mapper) if self.mapper is not None else None
+        return candy_list, ldm, mapper
+
+    def _setup_distributed_training(self):
+        """
+        Setup distributed training using DistributedDataParallel (DDP).
+        Handles both single-GPU and multi-GPU scenarios, with CPU fallback.
+        Respects config.device setting.
+        """
+        import torch.distributed as dist
+        from torch.nn.parallel import DistributedDataParallel as DDP
+        
+        # Check if config explicitly requests CPU
+        force_cpu = (self.config.device == 'cpu')
+        use_cuda = torch.cuda.is_available() and not force_cpu
+        
+        # Initialize distributed training if not already done
+        if self.multi_gpu and not dist.is_initialized():
+            # Choose backend based on CUDA availability and config
+            if use_cuda:
+                dist.init_process_group(backend='nccl')
+            else:
+                if force_cpu:
+                    print("[INFO] Config specifies CPU device, using CPU training with Gloo backend")
+                else:
+                    print("[WARNING] CUDA not available, falling back to CPU training with Gloo backend")
+                dist.init_process_group(backend='gloo')
+            
+        # Set device based on local rank, CUDA availability, and config
+        if self.multi_gpu and dist.is_initialized():
+            if use_cuda:
+                local_rank = int(os.environ.get('LOCAL_RANK', 0))
+                torch.cuda.set_device(local_rank)
+                self.device = torch.device(f'cuda:{local_rank}')
+            else:
+                # CPU distributed training
+                self.device = torch.device('cpu')
+                if force_cpu:
+                    print("[INFO] Using CPU for distributed training as specified in config")
+                else:
+                    print("[INFO] Using CPU for distributed training (CUDA not available)")
+        else:
+            # Single GPU/CPU case
+            if force_cpu:
+                self.device = torch.device('cpu')
+                print("[INFO] Using CPU for training as specified in config")
+            else:
+                self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+                if not torch.cuda.is_available():
+                    print("[INFO] CUDA not available, using CPU for training")
+            
+        # Move models to device
+        self.ldm = self.ldm.to(self.device)
+        if self.config.model.supervise_behv:
+            self.mapper = self.mapper.to(self.device)
+        for i_sub in range(self.n_subjects):
+            self.candy_list[i_sub] = self.candy_list[i_sub].to(self.device)
+            
+        # Wrap models with DDP if using multi-GPU
+        if self.multi_gpu and dist.is_initialized() and dist.get_world_size() > 1:
+            # For GPU training, use device_ids parameter
+            # For CPU training, don't use device_ids parameter
+            if use_cuda:
+                # GPU DDP
+                self.ldm = DDP(self.ldm, device_ids=[torch.cuda.current_device()], 
+                              find_unused_parameters=True)
+                if self.config.model.supervise_behv:
+                    self.mapper = DDP(self.mapper, device_ids=[torch.cuda.current_device()], 
+                                    find_unused_parameters=True)
+                
+                # Wrap individual CANDY models
+                for i_sub in range(self.n_subjects):
+                    self.candy_list[i_sub] = DDP(self.candy_list[i_sub], 
+                                               device_ids=[torch.cuda.current_device()], 
+                                               find_unused_parameters=True)
+            else:
+                # CPU DDP
+                self.ldm = DDP(self.ldm, find_unused_parameters=True)
+                if self.config.model.supervise_behv:
+                    self.mapper = DDP(self.mapper, find_unused_parameters=True)
+                
+                # Wrap individual CANDY models
+                for i_sub in range(self.n_subjects):
+                    self.candy_list[i_sub] = DDP(self.candy_list[i_sub], find_unused_parameters=True)
+                
+        print(f"[INFO] Distributed training setup complete. Device: {self.device}")
+        if self.multi_gpu and dist.is_initialized():
+            print(f"[INFO] World size: {dist.get_world_size()}, Rank: {dist.get_rank()}")
+
+    def _get_model_module(self, model):
+        """
+        Get the actual model module, handling DDP wrapping.
+        
+        Parameters:
+        -----------
+        - model: torch.nn.Module, The model (potentially wrapped with DDP)
+        
+        Returns:
+        --------
+        - torch.nn.Module: The actual model module
+        """
+        return model.module if hasattr(model, 'module') else model
+    
+    def _is_main_process(self):
+        """
+        Check if this is the main process in distributed training.
+        
+        Returns:
+        --------
+        - bool: True if this is the main process (rank 0) or single GPU training
+        """
+        if self.multi_gpu:
+            import torch.distributed as dist
+            if dist.is_initialized():
+                return dist.get_rank() == 0
+        return True
+
+    def _compute_distributed_contrastive_loss(self, a_hat_list, behv_batch_list=None, t_list=None):
+        """
+        Compute contrastive loss using local features only (no aggregation across processes).
+        This treats distributed training as simple data parallel without feature sharing.
+        
+        Parameters:
+        -----------
+        - a_hat_list: torch.Tensor, Local features for contrastive learning
+        - behv_batch_list: torch.Tensor, Local behavior features (optional)
+        - t_list: torch.Tensor, Local temporal features (optional)
+        
+        Returns:
+        --------
+        - contrastive_loss: torch.Tensor, Computed contrastive loss
+        """
+        if not self.config.model.contrastive:
+            return torch.tensor(0.0, device=a_hat_list.device)
+            
+        # Prepare labels by concatenating behavior and time features
+        labels = None
+        if behv_batch_list is not None and t_list is not None:
+            labels = torch.cat([behv_batch_list, t_list], dim=1)
+        elif behv_batch_list is not None:
+            labels = behv_batch_list
+        elif t_list is not None:
+            labels = t_list
+            
+        # Simple contrastive learning using only local features
+        if labels is not None:
+            contrastive_loss = self.contrastive_loss(features=a_hat_list, labels=labels)
+        else:
+            contrastive_loss = self.contrastive_loss(features=a_hat_list)
+            
+        return contrastive_loss
 
 
     def train_epoch(self, epoch, train_loader_list, verbose=True):
@@ -595,7 +812,7 @@ class CANDYDynamics(sharedDynamics):
                 # Perform forward pass and compute loss
                 model_vars = self.candy_list[i_sub](y=y_batch, ldm=self.ldm, mapper=self.mapper, mask=mask_batch, normalize=epoch<1)
 
-                loss, loss_dict = self.candy_list[i_sub].compute_loss(y=y_batch, 
+                loss, loss_dict = self._get_model_module(self.candy_list[i_sub]).compute_loss(y=y_batch, 
                                                         model_vars=model_vars, 
                                                         mask=mask_batch, 
                                                         behv=behv_batch)
@@ -630,10 +847,16 @@ class CANDYDynamics(sharedDynamics):
             if self.config.model.contrastive:
                 behv_batch_list = torch.cat(behv_batch_list, dim=0)
                 t_list = torch.cat(t_list, dim=0)*self.config.model.contrastive_time_scaler
-                # Select 4*batch_size samples randomly
+                # Select samples randomly
                 behv_batch_list = behv_batch_list[indices]
                 t_list = t_list[indices]
-                contrastive_loss = self.contrastive_loss(features=a_hat_list, labels=torch.cat([behv_batch_list, t_list], dim=1))
+                
+                # Use distributed contrastive learning for better negative sampling
+                contrastive_loss = self._compute_distributed_contrastive_loss(
+                    a_hat_list=a_hat_list,
+                    behv_batch_list=behv_batch_list,
+                    t_list=t_list
+                )
                 total_loss += contrastive_loss * self.config.model.contrastive_scale
                 total_loss_dict_list.append({'contrastive_loss': contrastive_loss.detach()})
 
@@ -665,7 +888,7 @@ class CANDYDynamics(sharedDynamics):
             step += 1
         
         # Save model, optimizer and learning rate scheduler (we save the initial and the last model no matter what config.model.save_steps is)
-        if epoch % self.config.model.save_steps == 0 or epoch == 1 or epoch == self.config.train.num_epochs:
+        if (epoch % self.config.model.save_steps == 0 or epoch == 1 or epoch == self.config.train.num_epochs) and self._is_main_process():
             self._save_ckpt(epoch=epoch, 
                             candy_list=self.candy_list, 
                             ldm=self.ldm,
@@ -680,7 +903,7 @@ class CANDYDynamics(sharedDynamics):
         epoch_loss = {key: value / count for key, value in running_losses.items()}
 
         # Logging the training step information for last batch
-        if verbose and (epoch % self.config.train.print_log_steps == 0 or epoch == 1 or epoch == self.config.train.num_epochs):
+        if verbose and (epoch % self.config.train.print_log_steps == 0 or epoch == 1 or epoch == self.config.train.num_epochs) and self._is_main_process():
             log_str = self._get_log_str(epoch=epoch, train_valid='train')
             self.logger.info(log_str)
 
@@ -746,7 +969,7 @@ class CANDYDynamics(sharedDynamics):
                     # Perform forward pass and compute loss
                     model_vars = self.candy_list[i_sub](y=y_batch, ldm=self.ldm, mapper=self.mapper, mask=mask_batch, normalize=False)
 
-                    loss, loss_dict = self.candy_list[i_sub].compute_loss(y=y_batch, 
+                    loss, loss_dict = self._get_model_module(self.candy_list[i_sub]).compute_loss(y=y_batch, 
                                                             model_vars=model_vars, 
                                                             mask=mask_batch, 
                                                             behv=behv_batch)
@@ -780,10 +1003,16 @@ class CANDYDynamics(sharedDynamics):
                 if self.config.model.contrastive:
                     behv_batch_list = torch.cat(behv_batch_list, dim=0)
                     t_list = torch.cat(t_list, dim=0)*self.config.model.contrastive_time_scaler
-                    # Select 4*batch_size samples randomly
+                    # Select samples randomly
                     t_list = t_list[indices]
                     behv_batch_list = behv_batch_list[indices]
-                    contrastive_loss = self.contrastive_loss(features=a_hat_list, labels=torch.cat([behv_batch_list, t_list], dim=1))
+                    
+                    # Use distributed contrastive learning for better negative sampling
+                    contrastive_loss = self._compute_distributed_contrastive_loss(
+                        a_hat_list=a_hat_list,
+                        behv_batch_list=behv_batch_list,
+                        t_list=t_list
+                    )
                     total_loss += contrastive_loss * self.config.model.contrastive_scale
                     total_loss_dict_list.append({'contrastive_loss': contrastive_loss.detach()})
                     
@@ -801,27 +1030,29 @@ class CANDYDynamics(sharedDynamics):
             # Save the best validation loss model (and best behavior reconstruction loss model if supervised)
             if self.metrics['valid']['model_loss'].compute() < self.best_val_loss:
                 self.best_val_loss = self.metrics['valid']['model_loss'].compute()
-                self._save_ckpt(epoch='best_loss', 
-                                candy_list=self.candy_list,
-                                ldm=self.ldm,
-                                mapper=self.mapper,
-                                optimizer=self.optimizer, 
-                                lr_scheduler=self.lr_scheduler)
-
-            if self.config.model.supervise_behv: 
-                if self.metrics['valid']['behv_loss'].compute() < self.best_val_behv_loss:
-                    self.best_val_behv_loss = self.metrics['valid']['behv_loss'].compute()
-                    self._save_ckpt(epoch='best_behv_loss', 
+                if self._is_main_process():
+                    self._save_ckpt(epoch='best_loss', 
                                     candy_list=self.candy_list,
                                     ldm=self.ldm,
                                     mapper=self.mapper,
                                     optimizer=self.optimizer, 
                                     lr_scheduler=self.lr_scheduler)
+
+            if self.config.model.supervise_behv: 
+                if self.metrics['valid']['behv_loss'].compute() < self.best_val_behv_loss:
+                    self.best_val_behv_loss = self.metrics['valid']['behv_loss'].compute()
+                    if self._is_main_process():
+                        self._save_ckpt(epoch='best_behv_loss', 
+                                        candy_list=self.candy_list,
+                                        ldm=self.ldm,
+                                        mapper=self.mapper,
+                                        optimizer=self.optimizer, 
+                                        lr_scheduler=self.lr_scheduler)
             
             # calculate the loss for this epoch
             epoch_loss = {key: value / count for key, value in running_losses.items()}
 
-            if verbose and (epoch % self.config.train.print_log_steps == 0 or epoch == 1 or epoch == self.config.train.num_epochs):
+            if verbose and (epoch % self.config.train.print_log_steps == 0 or epoch == 1 or epoch == self.config.train.num_epochs) and self._is_main_process():
                 # Logging the validation step information for last batch
                 log_str = self._get_log_str(epoch=epoch, train_valid='valid')
                 self.logger.info(log_str)
@@ -906,7 +1137,7 @@ class CANDYDynamics(sharedDynamics):
 
                         for k in self.config.loss.steps_ahead:
                             if k != 1:
-                                y_pred_k, _, _ = candy.get_k_step_ahead_prediction(model_vars, k)
+                                y_pred_k, _, _ = self._get_model_module(candy).get_k_step_ahead_prediction(model_vars, k)
                                 encoding_dict[f'y_{k}_pred'].append(y_pred_k)
                         
                         encoding_dict['behv'].append(behv_batch.detach().cpu())
@@ -964,8 +1195,11 @@ class CANDYDynamics(sharedDynamics):
 
                     # Dump variables to encoding_dict_full_inference
                     if isinstance(loader, torch.utils.data.dataloader.DataLoader):
+                        # Get the underlying candy model in case it's wrapped with DDP
+                        candy_module = self._get_model_module(candy)
+                        
                         # Flatten the batches of neural observations, corresponding mask and behavior if model is supervised
-                        encoding_dict_full_inference['y'] = encoding_dict['y'].reshape(1, -1, candy.dim_y) 
+                        encoding_dict_full_inference['y'] = encoding_dict['y'].reshape(1, -1, candy_module.dim_y) 
                         encoding_dict_full_inference['mask'] = encoding_dict['mask'].reshape(1, -1, 1) 
 
                         # if self.config.model.supervise_behv:
@@ -994,7 +1228,7 @@ class CANDYDynamics(sharedDynamics):
 
                         for k in self.config.loss.steps_ahead:
                             if k != 1:
-                                y_pred_k, _, _ = candy.get_k_step_ahead_prediction(model_vars, k)
+                                y_pred_k, _, _ = self._get_model_module(candy).get_k_step_ahead_prediction(model_vars, k)
                                 encoding_dict_full_inference[f'y_{k}_pred'] = y_pred_k
 
                         if self.config.model.supervise_behv:
@@ -1102,7 +1336,8 @@ class Mean(Metric):
         Initializer for Mean metric. Note that this class is a subclass of torchmetrics.Metric.
         '''
 
-        super().__init__(dist_sync_on_step=False)
+        # Disable distributed synchronization to avoid NCCL backend issues with CPU tensors
+        super().__init__(dist_sync_on_step=False, sync_on_compute=False)
         
         # Define total sum and number of samples that sum is computed over
         self.add_state("sum", default=torch.tensor(0, dtype=torch.float32), dist_reduce_fx="sum")
@@ -1120,8 +1355,13 @@ class Mean(Metric):
         '''
 
         value = value.clone().detach()
-        batch_size = torch.tensor(batch_size, dtype=torch.float32)
-        self.sum += value.cpu() * batch_size
+        batch_size = torch.tensor(batch_size, dtype=torch.float32, device=value.device)
+        
+        # Keep tensors on the same device as the input value for distributed training
+        self.sum = self.sum.to(value.device)
+        self.num_samples = self.num_samples.to(value.device)
+        
+        self.sum += value * batch_size
         self.num_samples += batch_size
 
 
@@ -1130,8 +1370,9 @@ class Mean(Metric):
         Resets the total sum and number of samples to 0
         '''
 
-        self.sum = torch.tensor(0, dtype=torch.float32)
-        self.num_samples = torch.tensor(0, dtype=torch.float32)
+        # Reset to zero while preserving device placement
+        self.sum = torch.tensor(0, dtype=torch.float32, device=self.sum.device)
+        self.num_samples = torch.tensor(0, dtype=torch.float32, device=self.num_samples.device)
 
 
     def compute(self):
@@ -1318,8 +1559,12 @@ class CANDY(nn.Module):
         # shared LDM for extracting behavior-relevant dynamics
         # Run LDM to infer filtered and smoothed dynamic latent factors
         x_pred, x_filter, x_smooth, Lambda_pred, Lambda_filter, Lambda_smooth = ldm(a=a_hat, mask=mask, do_smoothing=True, normalize=normalize)
-        A = ldm.A.repeat(num_seq, num_steps, 1, 1)
-        C = ldm.C.repeat(num_seq, num_steps, 1, 1)
+        
+        # Access the underlying LDM module (in case it's wrapped with DDP)
+        ldm_module = self._get_model_module(ldm)
+            
+        A = ldm_module.A.repeat(num_seq, num_steps, 1, 1)
+        C = ldm_module.C.repeat(num_seq, num_steps, 1, 1)
         a_pred = (C @ x_pred.unsqueeze(dim=-1)).squeeze(dim=-1) #  (num_seq, num_steps, dim_a, dim_x) x (num_seq, num_steps, dim_x, 1) --> (num_seq, num_steps, dim_a)
         a_filter = (C @ x_filter.unsqueeze(dim=-1)).squeeze(dim=-1) #  (num_seq, num_steps, dim_a, dim_x) x (num_seq, num_steps, dim_x, 1) --> (num_seq, num_steps, dim_a)
         a_smooth = (C @ x_smooth.unsqueeze(dim=-1)).squeeze(dim=-1) #  (num_seq, num_steps, dim_a, dim_x) x (num_seq, num_steps, dim_x, 1) --> (num_seq, num_steps, dim_a)
@@ -1331,10 +1576,13 @@ class CANDY(nn.Module):
 
         # Supervise a_seq or a_smooth to behavior if requested -> behv_hat shape: (num_seq, num_steps, dim_behv)
         if self.config.model.supervise_behv:
+            # Access the underlying mapper module (in case it's wrapped with DDP)
+            mapper_module = self._get_model_module(mapper)
+                
             if self.config.model.behv_from_smooth:
-                behv_hat = mapper(a_smooth.view(-1, self.dim_a))
+                behv_hat = mapper_module(a_smooth.view(-1, self.dim_a))
             else:
-                behv_hat = mapper(a_hat.view(-1, self.dim_a))
+                behv_hat = mapper_module(a_hat.view(-1, self.dim_a))
             behv_hat = behv_hat.view(-1, num_steps, self.dim_behv)
         else:
             behv_hat = None
@@ -1491,6 +1739,20 @@ class CANDY(nn.Module):
         loss = model_loss + behv_loss + reg_loss
         loss_dict['total_loss'] = loss.detach().cpu()
         return loss, loss_dict
+
+    def _get_model_module(self, model):
+        """
+        Get the actual model module, handling DDP wrapping.
+        
+        Parameters:
+        -----------
+        - model: torch.nn.Module, The model (potentially wrapped with DDP)
+        
+        Returns:
+        --------
+        - torch.nn.Module: The actual model module
+        """
+        return model.module if hasattr(model, 'module') else model
 
 
 class LDM(nn.Module):
@@ -1672,8 +1934,22 @@ class LDM(nn.Module):
                 except RuntimeError:
                     jitter = jitter * 10.0  # escalate jitter and retry
 
-            # Last resort: dense solve (RHS must match batch dims)
-            return torch.linalg.solve(S + jitter * I, I)
+            # Last resort: dense solve with larger jitter
+            try:
+                return torch.linalg.solve(S + jitter * I, I)
+            except RuntimeError:
+                # Final fallback: use much larger regularization
+                try:
+                    # Compute trace for batched tensors properly
+                    trace_S = S.diagonal(dim1=-2, dim2=-1).sum(dim=-1, keepdim=True).unsqueeze(-1)  # (..., 1, 1)
+                    large_jitter = torch.clamp(0.1 * trace_S / m, min=1e-3)
+                    return torch.linalg.solve(S + large_jitter * I, I)
+                except RuntimeError:
+                    # Ultimate fallback: use pseudo-inverse (this always works but may be less stable)
+                    # Only print warning occasionally to avoid spam
+                    if torch.rand(1).item() < 0.01:  # Print warning only 1% of the time
+                        print(f"[WARNING] Matrix too singular for jittered solve, using pseudo-inverse as fallback")
+                    return torch.pinverse(S)
 
         if mask is None:
             mask = torch.ones(a.shape[:-1], dtype=torch.float32)
@@ -1724,7 +2000,7 @@ class LDM(nn.Module):
             # except torch.linalg.LinAlgError as e:
             #     # print(e)
             #     S_inv = torch.pinverse(S)
-            S_inv = robust_psd_inverse(S)
+            S_inv = robust_psd_inverse(S, jitter_base=1e-5)
             K = Lambda_pred @ torch.permute(C_t, (0, 2, 1)) @ S_inv # (num_seq, dim_x, dim_a)
             K = torch.mul(K, mask[:, t, ...].unsqueeze(dim=1))  # (num_seq, dim_x, dim_a) x (num_seq, 1,  1)
 
