@@ -48,6 +48,13 @@ if __name__ == '__main__':
                         help='Optional dimension for behavior (default: optional).')
     parser.add_argument('--train_frac', type=float, default=1.0, 
                         help='Actual fraction of training data to use (default: 1.0). Useful for comparison of performance as a function of training data size while fixing the testing data.')
+    # Multi-GPU support arguments
+    parser.add_argument('--multi_gpu', action='store_true',
+                        help='Enable multi-GPU training.')
+    parser.add_argument('--gpu_ids', type=str, default=None,
+                        help='Comma-separated list of GPU IDs to use (e.g., "0,1,2"). If not specified, all available GPUs will be used.')
+    parser.add_argument('--data_parallel_type', type=str, default='DataParallel', choices=['DataParallel', 'DistributedDataParallel'],
+                        help='Type of data parallelism to use (default: DataParallel).')
     args = parser.parse_args()
     
     # args.model_type = 'SHAREDDFINE'
@@ -75,7 +82,22 @@ if __name__ == '__main__':
     model_params['seed'] = args.model_seed
     model_params['dim_l'] = args.latent_dim
 
-    data_params['train_frac'] = args.train_frac
+    # Handle multi-GPU arguments
+    if args.multi_gpu:
+        model_params['multi_gpu'] = True
+        if args.gpu_ids:
+            # Parse comma-separated GPU IDs
+            model_params['gpu_ids'] = [int(gpu_id.strip()) for gpu_id in args.gpu_ids.split(',')]
+        model_params['data_parallel_type'] = args.data_parallel_type
+        
+        # Adjust batch size for multi-GPU training if needed
+        if args.gpu_ids:
+            num_gpus = len([int(gpu_id.strip()) for gpu_id in args.gpu_ids.split(',')])
+        else:
+            num_gpus = torch.cuda.device_count()
+        
+        if num_gpus > 1:
+            print(f"[INFO] Fine-tuning with multi-GPU support on {num_gpus} GPUs")
 
     decoder_params = {'normalize': False, 'tol': 1e-4, 'decoder_type': 'lasso'}
     decoder_train_params = {
