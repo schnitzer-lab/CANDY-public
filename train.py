@@ -68,6 +68,25 @@ def main(args):
     if args.contrastive_off:
         params['model_params']['contrastive'] = False
     
+    # Handle multi-GPU arguments
+    if args.multi_gpu:
+        params['model_params']['multi_gpu'] = True
+        if args.gpu_ids:
+            # Parse comma-separated GPU IDs
+            params['model_params']['gpu_ids'] = [int(gpu_id.strip()) for gpu_id in args.gpu_ids.split(',')]
+        params['model_params']['data_parallel_type'] = args.data_parallel_type
+        
+        # Adjust batch size for multi-GPU training if needed
+        if args.gpu_ids:
+            num_gpus = len([int(gpu_id.strip()) for gpu_id in args.gpu_ids.split(',')])
+        else:
+            num_gpus = torch.cuda.device_count()
+        
+        if num_gpus > 1:
+            print(f"[INFO] Adjusting effective batch size for {num_gpus} GPUs")
+            # The effective batch size will be batch_size * num_gpus with DataParallel
+            # You might want to adjust the learning rate accordingly
+            
     df_train, df_test = runnerN(data_path_lst, params)
 
 
@@ -99,6 +118,14 @@ if __name__ == '__main__':
                         help='Actual fraction of training data to use (default: 1.0). Useful for comparison of performance as a function of training data size while fixing the testing data.')
     parser.add_argument('--not_save_latent', action='store_true',
                         help='turn off latent save.')
+    # Multi-GPU support arguments
+    parser.add_argument('--multi_gpu', action='store_true',
+                        help='Enable multi-GPU training.')
+    parser.add_argument('--gpu_ids', type=str, default=None,
+                        help='Comma-separated list of GPU IDs to use (e.g., "0,1,2"). If not specified, all available GPUs will be used.')
+    parser.add_argument('--data_parallel_type', type=str, default='DataParallel', choices=['DataParallel', 'DistributedDataParallel'],
+                        help='Type of data parallelism to use (default: DataParallel).')
+
 
     args = parser.parse_args()
     main(args)
