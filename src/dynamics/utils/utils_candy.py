@@ -370,6 +370,30 @@ def get_kernel_initializer_function(kernel_initializer_str):
 def softplus(x):
     return torch.log1p(torch.exp(-torch.abs(x))) + torch.relu(x)
 
+def scale_sv(A, eps):
+    """
+    Given a matrix A, scale its singular values to <=1-EPS.
+    Only do so if there is a singular value already >1-EPS.
+
+    Intuitively, this should work better than clipping
+    if all singular values are relatively close to 1, as it
+    preserves the relative sizes between singular values.
+    If there is a single singular value that is very large,
+    this will push the others to 0, so clipping may be
+    more appropriate.
+    """
+    _, s, _ = np.linalg.svd(A)
+    scale = np.maximum(np.max(s), 1 - eps) / (1 - eps)
+    return A / scale
+
+
+def clip_sv(A, eps):
+    """
+    Clip the SVs of a matrix to be less than 1-EPS.
+    """
+    u, s, vt = np.linalg.svd(A)
+    return u @ np.diag(np.clip(s, 0.0, 1.0 - eps)) @ vt
+
 def transform2bytrial(results, data_type='hat'):
     res_bytrial = results['batch_inference']
 
