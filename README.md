@@ -171,4 +171,16 @@ CANDY generates the following outputs in the specified save directory:
 ## Tutorial
 
 
+# Citation
+
+If you use **CANDY** in your research or build upon it, please cite:
+
+```bibtex
+@inproceedings{jiang2025candy,
+  title={Extracting task-relevant preserved dynamics from contrastive aligned neural recordings},
+  author={Jiang, Y. and Sheng, K. and Gao, Y. and Buchanan, K. and Shikano, Y. and Kim, T. H. and Zhao, Y. and Woo, S. J. and Dinc, F. and Linderman, S. W. and Schnitzer, M. J.},
+  booktitle={Advances in Neural Information Processing Systems},
+  year={2025}
+}
+```
 
