@@ -18,6 +18,7 @@ model_params:
   contrastive_time_scaler: 0.0
   contrastive_num_batch: 64
   batch_size: 32
+  stabilize_A: null # None or "clip" or "scale"
 train_params:
   do_full_inference: True
   data_type: hat

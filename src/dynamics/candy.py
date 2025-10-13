@@ -1,3 +1,5 @@
+# Part of the code is adapted from https://github.com/ShanechiLab/torchDFINE
+
 import wandb
 import numpy as np
 import torch
@@ -11,7 +13,7 @@ import datetime
 import logging
 
 from src.dynamics.base_dynamics import sharedDynamics
-from src.dynamics.utils.utils_candy import get_default_config, carry_to_device, get_kernel_initializer_function, compute_mse, get_activation_function, transform2bytrial_byagent
+from src.dynamics.utils.utils_candy import get_default_config, carry_to_device, get_kernel_initializer_function, compute_mse, get_activation_function, transform2bytrial_byagent, scale_sv, clip_sv
 from src.dynamics.utils.rnc_loss import RnCLoss
 
 class CANDYDynamics(sharedDynamics):
@@ -50,6 +52,7 @@ class CANDYDynamics(sharedDynamics):
         self.config.model.contrastive_scale = kwargs.pop('contrastive_scale', self.config.model.contrastive_scale)
         self.config.model.contrastive_time_scaler = kwargs.pop('contrastive_time_scaler', self.config.model.contrastive_time_scaler)
         self.config.model.contrastive_num_batch = kwargs.pop('contrastive_num_batch', self.config.model.contrastive_num_batch)
+        self.config.model.stabilize_A = kwargs.get('stabilize_A', None)
 
         self.config.model.activation_mapper  = kwargs.pop('activation_mapper', self.config.model.activation_mapper)
         self.config.hidden_layer_list_mapper = kwargs.pop('hidden_layer_list_mapper', self.config.model.hidden_layer_list_mapper)
@@ -107,7 +110,9 @@ class CANDYDynamics(sharedDynamics):
                        W_log_diag=W_log_diag, R_log_diag=R_log_diag,
                        mu_0=mu_0, Lambda_0=Lambda_0,
                        is_W_trainable=self.config.model.is_W_trainable,
-                       is_R_trainable=self.config.model.is_R_trainable)
+                       is_R_trainable=self.config.model.is_R_trainable,
+                       stabilize_A=self.config.model.stabilize_A
+                       )
         self.ldm.to(self.device)
 
         self.candy_list = list()
@@ -974,7 +979,7 @@ class CANDYDynamics(sharedDynamics):
                                                             mask=mask_batch, 
                                                             behv=behv_batch)
                     if loss > 10:
-                        print(f'[DEBUG] WARNING: loss is too high, check the model! [subject {i_sub}, loss {loss}]')
+                        print(f'[WARNING] loss is too high, check the model! [subject {i_sub}, loss {loss}]')
                     total_loss += loss
 
                     total_loss_dict_list.append(loss_dict)
@@ -1493,18 +1498,6 @@ class CANDY(nn.Module):
                           )
         return mlp_network
 
-    def _reparameterize(self, mu, logvar):
-        """
-        Reparameterization trick to sample from N(mu, var) from
-        N(0,1).
-        :param mu: (Tensor) Mean of the latent Gaussian [B x D]
-        :param logvar: (Tensor) Standard deviation of the latent Gaussian [B x D]
-        :return: (Tensor) [B x D]
-        """
-        std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
-        return eps * std + mu
-
     def forward(self, y, ldm, mapper, mask=None, normalize=False):
         '''
         Forward pass for CANDY Model
@@ -1791,10 +1784,7 @@ class LDM(nn.Module):
         self.is_W_trainable = kwargs.pop('is_W_trainable', True)
         self.is_R_trainable = kwargs.pop('is_R_trainable', True)
 
-        # # Initializer for identity matrix, zeros matrix and ones matrix
-        # self.eye_init = lambda shape, dtype=torch.float32: torch.eye(*shape, dtype=dtype)
-        # self.zeros_init = lambda shape, dtype=torch.float32: torch.zeros(*shape, dtype=dtype)
-        # self.ones_init = lambda shape, dtype=torch.float32: torch.ones(*shape, dtype=dtype)
+        self.stabilize_A = kwargs.pop('stabilize_A', None)
 
         # Get initial values for LDM parameters
         self.A = kwargs.pop('A', torch.eye(self.dim_x, self.dim_x, dtype=torch.float32).unsqueeze(dim=0)).type(torch.FloatTensor)
@@ -2163,24 +2153,29 @@ class LDM(nn.Module):
         - Lambda_t_all: torch.Tensor, shape: (num_seq, num_steps, dim_x, dim_x), Dynamic latent factor estimation error covariance filtered estimates (t|t) where first index of the second dimension has P_{0|0}
         - Lambda_back_all: torch.Tensor, shape: (num_seq, num_steps, dim_x, dim_x), Dynamic latent factor estimation error covariance smoothed estimates (t|T) where first index of the second dimension has P_{0|T}. Ones tensor if do_smoothing is False
         '''
-        # self.A.data = cap_eigenvalues(self.A.data, cap=10.0)
-        if self.A.data.numel() > 0:
-            A_norm = torch.linalg.norm(self.A.data, ord=2)
+        if self.stabilize_A == 'clip':
+            self.A.data = clip_sv(self.A.data, eps=1e-6)
+        elif self.stabilize_A == "scale":
+            self.A.data = scale_sv(self.A.data, eps=1e-6)
         else:
-            # print(f'[WARNING] A is empty', self.A.data, flush=True)
-            A_norm = 0.
-        if self.C.data.numel() > 0:
-            C_norm = torch.linalg.norm(self.C.data, ord=2)
-        else:
-            # print(f'[WARNING] C is empty', self.C.data, flush=True)
-            C_norm = 0.
-        norm_threshold = 10.0
-        if normalize or (A_norm > norm_threshold) or (C_norm > norm_threshold):
-            if self.A.data.numel() > 0 and A_norm > norm_threshold:
-                # self.A.data = self.A.data / max(1.0, torch.linalg.norm(self.A.data, ord=2))
-                self.A.data = self.A.data / A_norm * min(A_norm, norm_threshold)
-            if self.C.data.numel() > 0 and C_norm > norm_threshold:
-                self.C.data = self.C.data / C_norm * min(C_norm, norm_threshold)
+            if self.A.data.numel() > 0:
+                A_norm = torch.linalg.norm(self.A.data, ord=2)
+            else:
+                # print(f'[WARNING] A is empty', self.A.data, flush=True)
+                A_norm = 0.
+            if self.C.data.numel() > 0:
+                C_norm = torch.linalg.norm(self.C.data, ord=2)
+            else:
+                # print(f'[WARNING] C is empty', self.C.data, flush=True)
+                C_norm = 0.
+            norm_threshold = 10.0
+            if normalize or (A_norm > norm_threshold) or (C_norm > norm_threshold):
+                if self.A.data.numel() > 0 and A_norm > norm_threshold:
+                    # self.A.data = self.A.data / max(1.0, torch.linalg.norm(self.A.data, ord=2))
+                    self.A.data = self.A.data / A_norm * min(A_norm, norm_threshold)
+                if self.C.data.numel() > 0 and C_norm > norm_threshold:
+                    self.C.data = self.C.data / C_norm * min(C_norm, norm_threshold)
+
         if do_smoothing:
             mu_pred_all, mu_t_all, mu_back_all, Lambda_pred_all, Lambda_t_all, Lambda_back_all = self.smooth(a=a, mask=mask) 
         else:

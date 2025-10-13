@@ -131,7 +131,7 @@ def _load_onefile(file_path, **data_params):
         _behaviors[key] = _data['Behavior_byTrial'][key]
 
     num_total_trials = _neuraldata.shape[0]
-    print(f'number of total trial: {num_total_trials}')
+    print(f'[INFO] number of total trial: {num_total_trials}')
 
     neural_data_byTrial = []
     behavior_data_byTrial = {key: [] for key in behavior_keys} # the concatenated behaviors for filtered trials
@@ -163,7 +163,7 @@ def _load_onefile(file_path, **data_params):
         else:
             trial_types_data.append('left')
     num_trials = len(trial_types_data)
-    print(f'filtered trial number is {num_trials}')
+    print(f'[INFO] filtered trial number is {num_trials}')
 
     results = {
                 'neural_data_byTrial'   : neural_data_byTrial,

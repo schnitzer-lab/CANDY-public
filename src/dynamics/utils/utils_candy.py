@@ -1,3 +1,5 @@
+# Part of the code is adapted from https://github.com/ShanechiLab/torchDFINE
+
 from yacs.config import CfgNode as CN
 import torch
 import torch.nn as nn
@@ -60,14 +62,8 @@ _config.model.behv_from_smooth = False
 _config.model.save_dir = 'D:/DATA/DFINE_results'
 # Number of steps to save DFINE checkpoints
 _config.model.save_steps = 10
-
-# Subject discriminator
-_config.model.use_subject_discriminator = False
-_config.model.num_subjects = 1
-_config.model.subject_discriminator_hidden_layer_list = [32]
-_config.model.subject_discriminator_activation = 'leakyrelu'
-_config.model.subject_discriminator_kernel_initializer = 'xavier_normal'
-_config.model.subject_discriminator_scale = 1.0
+# How to train the dynamics model (None, scale, clip)
+_config.model.stabilize_A = None
 
 # Contrastive learning
 _config.model.contrastive = True
@@ -382,8 +378,8 @@ def scale_sv(A, eps):
     this will push the others to 0, so clipping may be
     more appropriate.
     """
-    _, s, _ = np.linalg.svd(A)
-    scale = np.maximum(np.max(s), 1 - eps) / (1 - eps)
+    _, s, _ = torch.linalg.svd(A)
+    scale = torch.maximum(torch.max(s), torch.tensor(1 - eps)) / (1 - eps)
     return A / scale
 
 
@@ -391,8 +387,8 @@ def clip_sv(A, eps):
     """
     Clip the SVs of a matrix to be less than 1-EPS.
     """
-    u, s, vt = np.linalg.svd(A)
-    return u @ np.diag(np.clip(s, 0.0, 1.0 - eps)) @ vt
+    u, s, vt = torch.linalg.svd(A)
+    return u @ torch.diag(torch.clip(s, 0.0, 1.0 - eps)) @ vt
 
 def transform2bytrial(results, data_type='hat'):
     res_bytrial = results['batch_inference']
