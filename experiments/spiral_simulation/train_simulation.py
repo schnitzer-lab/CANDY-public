@@ -307,6 +307,8 @@ def main(args):
             model._load_ckpt(model.candy_list, model.ldm, model.mapper, model.optimizer)
 
         model.fit(train_loader, val_loader, **train_params)
+        model.config['load']['ckpt'] = 'best_loss'
+        model._load_ckpt(model.candy_list, model.ldm, model.mapper, model.optimizer)
         data_orig_train_list, train_recon_list, z_hat_train_list, a_hat_train_list, behv_train_list, behv_hat_train_list, trials_type_train_list = model.transform(train_loader, data_type=train_params['data_type'], do_full_inference=train_params['do_full_inference'])
         data_orig_test_list, test_recon_list, z_hat_test_list,  a_hat_test_list, behv_test_list, behv_hat_test_list, trials_type_test_list = model.transform(test_loader, data_type=train_params['data_type'], do_full_inference=train_params['do_full_inference'])
 
