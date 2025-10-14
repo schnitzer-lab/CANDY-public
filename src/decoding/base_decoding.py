@@ -28,5 +28,7 @@ class Decoder(object):
         numerator = np.sum(y_true_mean * y_pred_mean, axis=0)
         denominator = np.sqrt(np.sum(y_true_mean**2, axis=0)) * np.sqrt(np.sum(y_pred_mean**2, axis=0))
         corr = numerator / denominator
+        if isinstance(corr, np.ndarray):
+            corr = np.nanmean(corr)
 
         return {'MSE': mse, 'MAE': mae, 'R2': r2, 'Corr': corr}#, 'Corr_pvalue': corr.pvalue}

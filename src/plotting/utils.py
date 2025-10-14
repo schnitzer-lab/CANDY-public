@@ -52,7 +52,7 @@ def get_vis_data(z_hat_train_dict, z_hat_test_dict, train_dataset, test_dataset,
     z_hat_train_lst_all_stack = np.vstack(z_hat_train_lst_all)
     z_hat_test_lst_all_stack  = np.vstack(z_hat_test_lst_all)
 
-    pca = PCA(n_components=3)
+    pca = PCA(n_components=2)
     z_hat_train_lst_all_pca = pca.fit_transform(z_hat_train_lst_all_stack)
     z_hat_test_lst_all_pca  = pca.transform(z_hat_test_lst_all_stack)
 

@@ -1,5 +1,6 @@
 # Decoder utils
 import numpy as np
+import pandas as pd
 from src.decoding import *
 
 def init_decoder(decoder_type, decoder_params):
@@ -217,16 +218,17 @@ def train_behv_decoder(dataset_info, z_hat_dict, behv_dict, behv_hat_dict, param
     separatedecoder_results_dict = train_behv_decoder_separate(dataset_info, z_hat_dict, behv_dict, params)
     #### Step 2: train one decoder
     unidecoder_results_dict = train_behv_decoder_uni(dataset_info, z_hat_dict, behv_dict, params)
-    #### Step 3: evaluate shared-DFINE predicted behavior and original behavior
-    dfinesup_results_dict = get_supbehv_decoder(dataset_info, behv_dict, behv_hat_dict, params)
+    #### Step 3: evaluate CANDY predicted behavior and original behavior
+    candysup_results_dict = get_supbehv_decoder(dataset_info, behv_dict, behv_hat_dict, params)
     decoding_results_dict = {
                                 'train_sep': separatedecoder_results_dict['train'],
                                 'test_sep' : separatedecoder_results_dict['test'],
-                                'train_sup': dfinesup_results_dict['train'],
-                                'test_sup' : dfinesup_results_dict['test'],
+                                'train_sup': candysup_results_dict['train'],
+                                'test_sup' : candysup_results_dict['test'],
                                 'train_uni': unidecoder_results_dict['train'],
                                 'test_uni' : unidecoder_results_dict['test']
                             }
+
     return decoding_results_dict
 
 def update_csv_behv(df_train, df_test, df_index, dataset_info, decoding_results_dict):
