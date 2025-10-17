@@ -34,8 +34,9 @@ conda create -n candy python=3.10
 conda activate candy
 
 # Install PyTorch (choose your version)
-# For GPU users:
-conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia
+# For GPU users: 
+> Ensure `pytorch-cuda` matches your NVIDIA driver. For CUDA 11.8:
+conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
 # For CPU users:
 conda install pytorch torchvision torchaudio cpuonly -c pytorch
 
@@ -43,19 +44,6 @@ conda install pytorch torchvision torchaudio cpuonly -c pytorch
 conda install numpy pandas scikit-learn matplotlib scipy pyyaml threadpoolctl -c conda-forge
 pip install torchmetrics yacs wandb pynapple pynwb h5py hdmf
 ```
-
-**Core Dependencies:**
-- `torch` + `torchvision` + `torchaudio`: PyTorch deep learning framework
-- `numpy` + `pandas`: Data manipulation and numerical computing  
-- `scikit-learn`: Machine learning utilities (preprocessing, train/test splits)
-- `matplotlib`: Plotting and visualization
-- `scipy`: Scientific computing utilities
-- `yacs`: Configuration management
-- `torchmetrics`: Metrics computation
-- `wandb`: Experiment tracking (optional)
-- `pyyaml`: YAML configuration file parsing
-- `pynapple` + `pynwb`: Neuroscience data format support
-- `threadpoolctl`: Threading control for linear decoders
 
 ## Usage
 
@@ -71,29 +59,32 @@ python train.py \
     --model_config ./config/model_config/candy_cbatch64_ctemp0.2_cs0.1_cts0.yaml \
     --data_config ./config/data_config/mouse_wheel.yaml \
     --decoder_config ./config/decoder_config/linear.yaml \
-    --latent_dim 8 \
-    --model_seed 0 \
-    --save_path ./results/candy_experiment \
-    --brain_area str \
     --data_folder /path/to/your/data
 ```
 
-**Key Arguments:**
-- `--model_type`: Model architecture to use (currently supports `CANDY`)
-- `--model_config`: Path to model configuration YAML file
-- `--data_config`: Path to dataset configuration YAML file  
-- `--decoder_config`: Path to behavior decoder configuration YAML file
-- `--latent_dim`: Dimensionality of the latent embedding space
-- `--model_seed`: Random seed for reproducibility
-- `--save_path`: Directory to save model checkpoints and results
-- `--brain_area`: Brain region of interest (for mouse data) or task type (for monkey data)
-- `--data_folder`: Root directory containing your neural data
+**Required:**
+- `--model_type`: Model type.
+- `--model_config`: Model YAML configuration file path.
 
-**Optional Arguments:**
-- `--behv_sup_off`: Disable behavior supervision (contrastive learning only)
-- `--contrastive_off`: Disable contrastive learning (behavior supervision only)
-- `--train_frac`: Fraction of training data to use (default: 1.0)
-- `--not_save_latent`: Skip saving latent representations
+**Common options:**
+- `--data_config`: Dataset configuration path (default: mouse_wheel.yaml).
+- `--decoder_config`: Behavior decoder YAML configuration file path (default: ./config/decoder_config/linear.yaml).
+- `--latent_dim`: Latent subspace dimension (default: 8).
+- `--model_seed`: Model seed (default: 0).
+- `--save_path`: Saving parent folder path (default: ./test).
+- `--brain_area`: Brain areas [mouse wheel] or Task type [monkey] (default: None).
+- `--data_folder`: Data parent folder (default: G:\My Drive\Research).
+
+**Training toggles:**
+- `--behv_sup_off`: Turn off the behavior supervision.
+- `--contrastive_off`: Turn off contrastive learning.
+- `--train_frac float`: Actual fraction of training data to use (default: 1.0). Useful for comparison of performance as a function of training data size while fixing the testing data.
+- `--not_save_latent`: Turn off latent save.
+
+**Multi‑GPU:**
+- `--multi_gpu`: Enable multi‑GPU training.
+- `--gpu_ids`: Comma-separated GPU IDs to use (e.g., `"0,1,2"`). If not specified, all available GPUs will be used.
+- `--data_parallel_type`: Type of data parallelism to use (default: DataParallel).
 
 ### Fine-tuning Training
 
@@ -104,59 +95,7 @@ python fine_tuning_train.py \
     --model_type CANDY \
     --model_config ./config/model_config/candy_cbatch64_ctemp0.2_cs0.1_cts0.yaml \
     --data_config ./config/data_config/mouse_wheel.yaml \
-    --latent_dim 8 \
-    --model_seed 0 \
-    --save_path ./results/candy_finetuned \
-    --brain_area str \
     --data_folder /path/to/your/data
-```
-
-### Configuration Files
-
-CANDY uses YAML configuration files to specify model parameters, data settings, and decoder configurations:
-
-#### Model Configuration
-Defines CANDY-specific hyperparameters (see `config/model_config/`):
-- Learning rate, regularization, and training epochs
-- Contrastive learning parameters (temperature, scaling)
-- Network architecture (hidden layers, activation functions)
-- Behavior supervision settings
-
-#### Data Configuration  
-Specifies dataset parameters (see `config/data_config/`):
-- Data paths and subject information
-- Trial length constraints and preprocessing options
-- Train/validation/test split ratios
-- Normalization methods for neural and behavioral data
-
-#### Decoder Configuration
-Sets behavior decoding parameters (see `config/decoder_config/`):
-- Linear (`linear.yaml`) or nonlinear (`onelayer.yaml`) decoders
-- Hyperparameter grids for cross-validation
-- Training procedures and regularization
-
-### Example Workflows
-
-**Mouse wheel task with striatal data:**
-```bash
-python train.py \
-    --model_type CANDY \
-    --model_config ./config/model_config/candy_cbatch64_ctemp0.5_cs0.5_cts0.yaml \
-    --data_config ./config/data_config/mouse_wheel.yaml \
-    --latent_dim 8 \
-    --brain_area str \
-    --save_path ./results/mouse_str_experiment
-```
-
-**Monkey reaching task:**
-```bash
-python train.py \
-    --model_type CANDY \
-    --model_config ./config/model_config/candy_cbatch64_ctemp0.2_cs0.1_cts0.yaml \
-    --data_config ./config/data_config/perich_monkey.yaml \
-    --latent_dim 8 \
-    --brain_area CO \
-    --save_path ./results/monkey_co_experiment
 ```
 
 ### Output
@@ -167,8 +106,6 @@ CANDY generates the following outputs in the specified save directory:
 - **Training logs**: Loss curves and metrics during training
 - **Behavior decoding results**: Performance metrics for behavioral predictions
 - **Visualizations**: Plots of latent dynamics and training progress
-
-## Tutorial
 
 
 # Citation
