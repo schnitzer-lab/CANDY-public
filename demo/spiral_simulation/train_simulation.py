@@ -2,9 +2,10 @@ import os
 import pickle
 import argparse
 import sys
-sys.path.insert(0, '../') 
-sys.path.insert(0, '../../') 
-sys.path.insert(0, '../../../') 
+
+# Add the project root to Python path for src imports
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parents[2]))
 
 import itertools
 import wandb
@@ -13,7 +14,7 @@ import numpy as np
 import pandas as pd 
 
 from sklearn.decomposition import PCA
-from experiments.spiral_simulation.cca import CCA
+from cca import CCA
 
 from src.decoding.utils import train_behv_decoder, update_csv_behv
 from src.plotting.utils import plot_losses, get_vis_data

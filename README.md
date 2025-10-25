@@ -12,20 +12,29 @@ Jiang, Y.\*, Sheng, K.\*, Gao, Y., Buchanan, K., Shikano, Y., Kim, T.H., Zhao, Y
 ### Recommended: Conda Environment
 Use the provided environment file with the core dependencies needed by CANDY:
 
+#### Option 1: GPU Environment (Recommended for most users)
 ```bash
+# Create and activate the GPU environment
 conda env create -f environment.yml
 conda activate candy
+
+# Install CANDY as a package
+pip install -e .
 ```
 
-### Alternative: CPU-only Installation
-For users without GPU support:
+#### Option 2: CPU-only Environment
+For users without GPU support or for development:
 
 ```bash
+# Create and activate the CPU environment
 conda env create -f environment_cpu.yml
 conda activate candy-cpu
+
+# Install CANDY as a package
+pip install -e .
 ```
 
-### Manual Installation
+### Alternative: Manual Installation
 For custom installations or if you prefer pip:
 
 ```bash
@@ -35,7 +44,7 @@ conda activate candy
 
 # Install PyTorch (choose your version)
 # For GPU users: 
-> Ensure `pytorch-cuda` matches your NVIDIA driver. For CUDA 11.8:
+# Ensure `pytorch-cuda` matches your NVIDIA driver. For CUDA 11.8:
 conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
 # For CPU users:
 conda install pytorch torchvision torchaudio cpuonly -c pytorch
@@ -43,11 +52,33 @@ conda install pytorch torchvision torchaudio cpuonly -c pytorch
 # Install other dependencies
 conda install numpy pandas scikit-learn matplotlib scipy pyyaml threadpoolctl -c conda-forge
 pip install torchmetrics yacs wandb pynapple pynwb h5py hdmf
+
+# Install CANDY as a package
+pip install -e .
+```
+
+### Verify Installation
+After installation, you can verify that CANDY is properly installed:
+
+```bash
+# Activate your environment
+conda activate candy  # or candy-cpu
+
+# Test imports (run from project root)
+cd /path/to/CANDY-public
+python -c 'import src; print("CANDY installed successfully!")'
 ```
 
 ## Usage
 
-CANDY provides two main training scripts for different use cases:
+### Important: Run from Project Root
+**All CANDY scripts must be run from the project root directory** (`/path/to/CANDY-public/`) to ensure proper imports work correctly.
+
+```bash
+# Always start from the project root
+cd /path/to/CANDY-public
+conda activate candy  # or candy-cpu
+```
 
 ### Basic Training
 
@@ -96,6 +127,18 @@ python fine_tuning_train.py \
     --model_config ./config/model_config/candy_cbatch64_ctemp0.2_cs0.1_cts0.yaml \
     --data_config ./config/data_config/mouse_wheel.yaml \
     --data_folder /path/to/your/data
+```
+
+### Demo Scripts
+
+CANDY includes demo scripts for testing and experimentation:
+
+```bash
+# Spiral simulation demo
+python demo/spiral_simulation/train_simulation.py \
+    --ckpt_save_dir ./demo_output \
+    --data_path ./demo/spiral_simulation/spiral_data.pkl \
+
 ```
 
 ### Output

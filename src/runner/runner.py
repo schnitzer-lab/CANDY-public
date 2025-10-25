@@ -1,7 +1,5 @@
 import os 
 import pickle
-import sys
-sys.path.insert(0, '../../') 
 import itertools
 import wandb
 
