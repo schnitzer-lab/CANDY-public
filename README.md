@@ -1,7 +1,6 @@
 # CANDY: Extracting task-relevant preserved dynamics from contrastive aligned neural recordings
 **CANDY** (**C**ontrastive **A**ligned **N**eural **DY**namics) is an end-to-end framework that aligns neural and behavioral data using rank-based contrastive learning, adapted for continuous behavioral variables, to project neural activity from different sessions onto a shared low-dimensional embedding space. CANDY fits a shared linear dynamical system to the aligned embeddings, enabling an interpretable model of the conserved temporal structure in the latent space.
 
-# Publication
 Jiang, Y.\*, Sheng, K.\*, Gao, Y., Buchanan, K., Shikano, Y., Kim, T.H., Zhao, Y., Woo, S.J., Dinc, F., Linderman, S.W., Schnitzer, M.J., **Extracting task-relevant preserved dynamics from contrastive aligned neural recordings.** *NeurIPS 2025 (spotlight).* [paper](https://openreview.net/forum?id=uvTea5Rfek)
 
 # Installation
@@ -42,18 +41,26 @@ pip install torchmetrics yacs wandb pynapple pynwb h5py hdmf
 pip install -e .
 ```
 
+# Datasets
+| Dataset                              | Download |
+|--------------------------------------|----------|
+| Synthesized spiral dataset           | [⬇️ Download](https://github.com/schnitzer-lab/CANDY-public/blob/main/demo/spiral_simulation/spiral_data.pkl) |
+| Mouse wheel turning striatum dataset | [⬇️ Download](https://drive.google.com/drive/folders/1_Jt3vlADlHXhfm1BNRNMPD7vzPSJgHii?usp=sharing) |
+| Monkey dataset (DANDI 000688)        | [⬇️ Download](https://dandiarchive.org/dandiset/000688?search=perich&pos=1) |
+
+
 ## Usage
 ### Basic Training
 
 Train a CANDY model from scratch using the main training script:
 
 ```bash
-python train.py \
-    --model_type CANDY \
-    --model_config ./config/model_config/candy_cbatch64_ctemp0.2_cs0.1_cts0.yaml \
-    --data_config ./config/data_config/mouse_wheel.yaml \
-    --decoder_config ./config/decoder_config/linear.yaml \
+python train.py --model_type CANDY \
+    --model_config config/model_config/candy_cbatch64_ctemp0.2_cs0.1_cts0.yaml \
+    --data_config config/data_config/mouse_wheel.yaml \
+    --decoder_config config/decoder_config/linear.yaml \
     --data_folder /path/to/your/data
+    --behv_sup_off
 ```
 
 **Required:**
@@ -66,7 +73,6 @@ python train.py \
 - `--latent_dim`: Latent subspace dimension (default: 8).
 - `--model_seed`: Model seed (default: 0).
 - `--save_path`: Saving parent folder path (default: ./test).
-- `--brain_area`: Brain areas [mouse wheel] or Task type [monkey] (default: None).
 - `--data_folder`: Data parent folder (default: G:\My Drive\Research).
 
 **Training toggles:**
