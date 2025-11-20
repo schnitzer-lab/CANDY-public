@@ -2,31 +2,16 @@
 **CANDY** (**C**ontrastive **A**ligned **N**eural **DY**namics) is an end-to-end framework that aligns neural and behavioral data using rank-based contrastive learning, adapted for continuous behavioral variables, to project neural activity from different sessions onto a shared low-dimensional embedding space. CANDY fits a shared linear dynamical system to the aligned embeddings, enabling an interpretable model of the conserved temporal structure in the latent space.
 
 # Publication
-Jiang, Y.\*, Sheng, K.\*, Gao, Y., Buchanan, K., Shikano, Y., Kim, T.H., Zhao, Y., Woo, S.J., Dinc, F., Linderman, S.W., Schnitzer, M.J., **Extracting task-relevant preserved dynamics from contrastive aligned neural recordings.** *NeurIPS 2025 (spotlight).* [paper]
+Jiang, Y.\*, Sheng, K.\*, Gao, Y., Buchanan, K., Shikano, Y., Kim, T.H., Zhao, Y., Woo, S.J., Dinc, F., Linderman, S.W., Schnitzer, M.J., **Extracting task-relevant preserved dynamics from contrastive aligned neural recordings.** *NeurIPS 2025 (spotlight).* [paper](https://openreview.net/forum?id=uvTea5Rfek)
 
-\* equal contribution
-
-# Quick Start
-## Installation
-
-### Recommended: Conda Environment
-Use the provided environment file with the core dependencies needed by CANDY:
-
-#### Option 1: GPU Environment (Recommended for most users)
+# Installation
+### Recommended Conda enviornmenm
 ```bash
 # Create and activate the GPU environment
 conda env create -f environment.yml
 conda activate candy
 
-# Install CANDY as a package
-pip install -e .
-```
-
-#### Option 2: CPU-only Environment
-For users without GPU support or for development:
-
-```bash
-# Create and activate the CPU environment
+# (Alternative) For CPU version, please use
 conda env create -f environment_cpu.yml
 conda activate candy-cpu
 
@@ -57,29 +42,7 @@ pip install torchmetrics yacs wandb pynapple pynwb h5py hdmf
 pip install -e .
 ```
 
-### Verify Installation
-After installation, you can verify that CANDY is properly installed:
-
-```bash
-# Activate your environment
-conda activate candy  # or candy-cpu
-
-# Test imports (run from project root)
-cd /path/to/CANDY-public
-python -c 'import src; print("CANDY installed successfully!")'
-```
-
 ## Usage
-
-### Important: Run from Project Root
-**All CANDY scripts must be run from the project root directory** (`/path/to/CANDY-public/`) to ensure proper imports work correctly.
-
-```bash
-# Always start from the project root
-cd /path/to/CANDY-public
-conda activate candy  # or candy-cpu
-```
-
 ### Basic Training
 
 Train a CANDY model from scratch using the main training script:
