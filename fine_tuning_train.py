@@ -9,8 +9,6 @@ import argparse
 import torch 
 from torch.utils.data import DataLoader
 
-import sys
-sys.path.append('..')
 from src.data_loader.data_loader import NeuralData4Areas, load_rnndataset
 from src.dynamics import *
 from config.load_config import load_model_config, load_data_config
