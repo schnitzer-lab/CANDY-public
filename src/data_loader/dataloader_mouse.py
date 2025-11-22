@@ -1,175 +1,217 @@
 import numpy as np
-import scipy
+import scipy 
+import pickle
+import copy
 
-from src.data_loader.data_utils import train_val_test_split, normalize, concatenate_behaviors
+from sklearn.model_selection import train_test_split
+from src.data_loader.data_utils import train_val_test_split, normalize, concatenate_behaviors, parse_data_name
+
+def create_dataset(areas):
+    dataset = {
+        'neural_data': [], # a list of trials, each is a numpy array of shape (trial_length x num_neurons), length = num_trials
+        'behavior_data': [], # a list of trials, each is a numpy array of shape (trial_length x behavior_dim), length = num_trials
+        'trials_type': [], # a list of trial types (length = num_trials)
+        'trials_length': [], # a list of trial Lengths (length = num_trials)
+    }
+    return dataset
+
+def concatenate_area_neural_data(neural_data_dict, areas, **data_params):
+    """
+    Concatenate neural data from multiple areas along the neuron dimension. 
+    Filter areas based on provided area list. 
+    Filter trials based on min_trial_len and max_trial_len in data_params if provided.
+    
+    Args:
+        neural_data_dict: A dictionary where keys are area names and values are lists of trials.
+                          Each trial is a numpy array of shape (trial_length x num_neurons_in_area).
+        areas: List of area names to concatenate.
+        **data_params: Optional parameters including:
+            - min_trial_len: Minimum trial length to include (inclusive). Trials shorter than this are filtered out.
+            - max_trial_len: Maximum trial length to include (inclusive). Trials longer than this are filtered out.
+    
+    Returns:
+        concatenated_data: A list of trials, each is a numpy array of shape (trial_length x total_num_neurons).
+        valid_trial_indices: A list of trial indices that passed the length filters.
+        area_labels: A numpy array of shape (total_num_neurons,) where each element is 0 to (num_areas-1) 
+                     indicating which area each neuron belongs to.
+        area_mapping: A dictionary mapping area names to their corresponding numeric labels (0 to num_areas-1).
+    """
+    num_trials = len(next(iter(neural_data_dict.values())))
+    min_trial_len = data_params.get('min_trial_len', None)
+    max_trial_len = data_params.get('max_trial_len', None)
+    
+    concatenated_data = []
+    valid_trial_indices = []
+    
+    for trial_idx in range(num_trials):
+        trial_len = neural_data_dict[areas[0]][trial_idx].shape[0]
+        
+        # Apply trial length filters if specified
+        if min_trial_len is not None and trial_len < min_trial_len:
+            continue  # Skip trials that are too short
+        if max_trial_len is not None and trial_len > max_trial_len:
+            continue  # Skip trials that are too long
+        
+        # Concatenate data from all areas for this trial
+        concatenated_trial = np.concatenate(
+            [neural_data_dict[area][trial_idx].reshape(trial_len, -1) for area in areas], axis=1
+        )
+        concatenated_data.append(concatenated_trial)
+        valid_trial_indices.append(trial_idx)
+    
+    # Create area mapping: {area_name: numeric_label}
+    area_mapping = {area: idx for idx, area in enumerate(areas)}
+    
+    # Create area labels based on the first valid trial
+    if len(concatenated_data) > 0:
+        total_neurons = concatenated_data[0].shape[1]
+        area_labels = np.zeros(total_neurons, dtype=int)
+        
+        start_idx = 0
+        for area in areas:
+            # Use first trial to determine neuron count per area
+            area_neuron_count = neural_data_dict[area][valid_trial_indices[0]].shape[1]
+            
+            # Set numeric labels
+            area_labels[start_idx:start_idx + area_neuron_count] = area_mapping[area]
+            
+            start_idx += area_neuron_count
+    else:
+        # No valid trials found
+        raise Exception("No valid trials found after applying length filters.")
+
+    return concatenated_data, valid_trial_indices, area_labels, area_mapping, num_trials
+
+def concatenate_behaviors(behv_data_dict, behavior_keys):
+    """
+    Concatenate behavior data from multiple keys along the behavior dimension.
+    Args:
+        behv_data_dict: A dictionary where keys are behavior names and values are lists of trials.
+                        Each trial is a numpy array of shape (trial_length x behavior_dim_for_key).
+        behavior_keys: List of behavior keys to concatenate.
+    Returns:
+        concatenated_data: A list of trials, each is a numpy array of shape (trial_length x total_behavior_dim).
+    """
+    num_trials = len(next(iter(behv_data_dict.values())))
+    concatenated_data = []
+    for trial_idx in range(num_trials):
+        trial_len = behv_data_dict[behavior_keys[0]][trial_idx].shape[0]
+        concatenated_trial = np.concatenate(
+            [behv_data_dict[key][trial_idx].reshape(trial_len, -1) for key in behavior_keys], axis=1
+        )
+        concatenated_data.append(concatenated_trial)
+    return concatenated_data
+
+# parse the dataset into neural_data_dict and behavior_data_dict
+def parse_neural_data_to_dict(dataset, dataset_info):
+    neural_data_dict = {sess_name: {} for sess_name in dataset_info.keys()}
+    for sess_name in dataset_info.keys():
+        neural_data = copy.deepcopy(dataset[sess_name]['neural_data'])
+        area_mapping = dataset_info[sess_name]['area_mapping']
+        area_labels = dataset_info[sess_name]['area_labels']
+        for trial_idx in range(len(neural_data)):
+            trial_data = neural_data[trial_idx]
+            # Map area labels to their corresponding trial data
+            for area_name, area_idx in area_mapping.items():
+                if area_name not in neural_data_dict[sess_name]:
+                    neural_data_dict[sess_name][area_name] = []
+                neural_data_dict[sess_name][area_name].append(trial_data[:, area_labels == area_idx])
+    return neural_data_dict
+
+def to_list_of_areas(neural_data, area_labels, area_mapping):
+    neural_data_by_area = {}
+    for area in area_mapping.keys():
+        label = area_mapping[area]
+        area_indices = np.where(area_labels == label)[0]
+        neural_data_by_area[area] = [neural_data[trial_id][:, area_indices] for trial_id in range(len(neural_data))]
+    return neural_data_by_area
 
 def dataloader_mouse_wheel(fpath_lst, **data_params):
     """
-    INPUT:
-        [data_params]: 
-        - seed : int 
-        - behavior_columns : a list of behavior keys
-        - train_size 
-        - val_size 
-        - test_size
-    OUTPUT: 
-        [train_dataset] : a dictionary of entry (animal_id, session_id). Each value is another dictionary
-                          {
-                            'neural_data'   : a list of matrix,
-                            'behavior_data' : a list of matrix,
-                            'trials_type'   : a list of string, which corresponds to left or right,
-                            'trials_length' : a list of int, which corresponds to the trial length
-                          }
-        [val_dataset] : similar as above
-        [test_dataset]: similar as above
-        [dataset_info]: a dictionary of train-val-test split trials 
-                        {train_trials : a list of trial ids that belong to the [train_dataset],
-                         val_trials   : a list of trial ids that belong to the [val_dataset], 
-                         test_trials  : a list of trial ids that belong to the [test_dataset]
-                        }
     """
     seed = data_params['seed']
     np.random.seed(seed)
     train_dataset = {}
-    val_dataset   = {}
+    valid_dataset = {}
     test_dataset  = {}
     dataset_info  = {}
 
     for i, fpath in enumerate(fpath_lst):
-        subject_id  = fpath[-21:-17]
-        session_date = fpath[-16:-8] 
-        results = _load_onefile(fpath, **data_params)
-        print(f'[INFO] subject {subject_id} session {session_date} data LOADED!')
+        subject_id, session_date = parse_data_name(fpath)
+        areas = data_params['brain_areas']
         sess_name = f'Animal_{subject_id}-Session_{session_date}'
+        
+        train_dataset[sess_name] = create_dataset(areas)
+        valid_dataset[sess_name]   = create_dataset(areas)
+        test_dataset[sess_name]  = create_dataset(areas)
 
-        train_dataset[sess_name] = {'neural_data': [], 'behavior_data': [], 'trials_type': [], 'trials_length': []}
-        val_dataset[sess_name]   = {'neural_data': [], 'behavior_data': [], 'trials_type': [], 'trials_length': []}
-        test_dataset[sess_name]  = {'neural_data': [], 'behavior_data': [], 'trials_type': [], 'trials_length': []}
-        dataset_info[sess_name]  = {'train_trials': None, 'val_trials': None, 'test_trials': None, 'obs_dim': None}
-        ### Get the train-val-test split based on trials ###
-        num_trials = results['num_trials']
-        train_trials, val_trials, test_trials = train_val_test_split(num_trials, data_params['val_size'], data_params['test_size'], seed)
+        pickle_data = pickle.load(open(fpath, 'rb'))
+        # load all data (neural data include all areas, behv data include all behavior columns)
+        neural_data  = pickle_data['neural_data']
+        behv_data    = pickle_data['behavior_data']
 
-        neural_data   = results['neural_data_byTrial']
-        behv_data     = results['behavior_data_byTrial']
-        trial_lengths = results['trial_lengths_data']
-        trial_types   = results['trial_types_data']
+        # Concatenate neural data and get valid trial indices after filtering
+        neural_data, valid_trial_indices, area_labels, area_mapping, orig_num_trials = concatenate_area_neural_data(neural_data, areas=areas, **data_params)
+        
+        # Concatenate behavior data for all trials first
+        behv_data_all = concatenate_behaviors(behv_data, behavior_keys=data_params['behavior_keys'])
+        behv_data = [behv_data_all[idx] for idx in valid_trial_indices] # Filter behavior data to only include valid trials (matching neural data)
 
-        obs_dim = neural_data[0].shape[1]
-        dataset_info[sess_name]['obs_dim'] = obs_dim
-        dataset_info[sess_name]['train_trials'] = train_trials 
-        dataset_info[sess_name]['val_trials']   = val_trials 
-        dataset_info[sess_name]['test_trials']  = test_trials
+        # filter trial_types and trial_outcomes based on valid_trial_indices if they exist
+        if 'trial_types' in pickle_data.keys():
+            trial_types_all = pickle_data['trial_types']
+            trial_types = [trial_types_all[idx] for idx in valid_trial_indices]
+        else:
+            trial_types = [None for _ in range(len(valid_trial_indices))]
+            print(f'[WARNING] trial_types not found in data for session {sess_name}, setting all to None.')
+
+        num_trials = len(neural_data)
+        obs_dim = neural_data[0].shape[1] if num_trials > 0 else 0
+
+        print(f'[DATALOADER] Loaded session {sess_name} with {num_trials} trials (filtered from original {orig_num_trials} trials), obs_dim: {obs_dim}, num_areas: {len(areas)}')
+
+        train_trials, valid_trials, test_trials = train_val_test_split(num_trials, data_params['valid_size'], data_params['test_size'], seed)
+        
+        dataset_info[sess_name] = {
+            'obs_dim': obs_dim,
+            'train_trials': train_trials,
+            'valid_trials': valid_trials,
+            'test_trials': test_trials,
+            'area_labels': area_labels,
+            'area_mapping': area_mapping,
+            'valid_trial_indices': valid_trial_indices
+        }
 
         # Get the neural data before normalization
         train_neural_data = [neural_data[k] for k in train_trials]
-        val_neural_data   = [neural_data[k] for k in val_trials]
-        test_neural_data  = [neural_data[k] for k in test_trials]
+        valid_neural_data = [neural_data[k] for k in valid_trials]
+        test_neural_data = [neural_data[k] for k in test_trials]
         # Get the behavior data before normalization
-        train_behv_data   = {key: [value[i] for i in train_trials] for key, value in behv_data.items()}
-        val_behv_data   = {key: [value[i] for i in val_trials] for key, value in behv_data.items()}
-        test_behv_data   = {key: [value[i] for i in test_trials] for key, value in behv_data.items()}
+        train_behv_data   = [behv_data[k] for k in train_trials]
+        valid_behv_data   = [behv_data[k] for k in valid_trials]
+        test_behv_data    = [behv_data[k] for k in test_trials]
         # Get the trials length data
-        train_trials_len   = [trial_lengths[k] for k in train_trials]
-        val_trials_len   = [trial_lengths[k] for k in val_trials]
-        test_trials_len   = [trial_lengths[k] for k in test_trials]
-        # Get the trials type data
-        train_trials_type = [trial_types[k] for k in train_trials]
-        val_trials_type = [trial_types[k] for k in val_trials]
-        test_trials_type = [trial_types[k] for k in test_trials]
+        train_trials_len   = [train_neural_data[k].shape[0] for k in range(len(train_trials))]
+        valid_trials_len   = [valid_neural_data[k].shape[0] for k in range(len(valid_trials))]
+        test_trials_len    = [test_neural_data[k].shape[0] for k in range(len(test_trials))]
+        # Get trials type data (don't have different trial types here, so all None)
+        train_dataset[sess_name]['trials_type'] = [trial_types[k] for k in train_trials]
+        valid_dataset[sess_name]['trials_type'] = [trial_types[k] for k in valid_trials]
+        test_dataset[sess_name]['trials_type']  = [trial_types[k] for k in test_trials]
 
-        ### Normalize data ###
-        # Normalize neural data
-        train_neural_data, val_neural_data, test_neural_data = normalize(data_params['neural_normalizor'], train_neural_data, val_neural_data, test_neural_data)
-        # Nornalize behavior data
-        behv_data_train_norm_dic = {}
-        behv_data_val_norm_dic   = {}
-        behv_data_test_norm_dic = {}
-        for j_behv, key in enumerate(data_params['behavior_keys']):
-            num_train = len(train_behv_data[key])
-            num_test  = len(test_behv_data[key])
-            num_val   = len(val_behv_data[key]) if val_behv_data is not None else None
-            train_key_data = train_behv_data[key]
-            val_key_data   = val_behv_data[key] if val_behv_data is not None else None
-            test_key_data  = test_behv_data[key]
-            if key not in ['lick', 'speed_class']:
-                train_key_data,  val_key_data,  test_key_data  = normalize(data_params['behavior_normalizor'], train_key_data, val_key_data, test_key_data)
-            behv_data_train_norm_dic[key] = train_key_data
-            if len(val_trials) != 0:
-                behv_data_val_norm_dic[key] = val_key_data
-            behv_data_test_norm_dic[key] = test_key_data
-        # convert behavior dictionary to list of numpy arrays
-        train_behv_data = concatenate_behaviors(behv_data_train_norm_dic, num_train, data_params['behavior_keys'])
-        val_behv_data   = concatenate_behaviors(behv_data_val_norm_dic, num_val, data_params['behavior_keys'])
-        test_behv_data  = concatenate_behaviors(behv_data_test_norm_dic, num_test, data_params['behavior_keys'])
-        ######################
+        #------ Normalization ------#
+        train_neural_data, valid_neural_data, test_neural_data = normalize(data_params['neural_normalizor'], train_neural_data, valid_neural_data, test_neural_data)
+        train_behv_data, valid_behv_data, test_behv_data = normalize(data_params['behavior_normalizor'], train_behv_data, valid_behv_data, test_behv_data)
+        #---------------------------#
         train_dataset[sess_name]['neural_data'] = train_neural_data
-        val_dataset[sess_name]['neural_data']   = val_neural_data
+        valid_dataset[sess_name]['neural_data'] = valid_neural_data
         test_dataset[sess_name]['neural_data']  = test_neural_data
 
         train_dataset[sess_name]['behavior_data'] = train_behv_data
-        val_dataset[sess_name]['behavior_data']   = val_behv_data
+        valid_dataset[sess_name]['behavior_data'] = valid_behv_data
         test_dataset[sess_name]['behavior_data']  = test_behv_data
 
-        train_dataset[sess_name]['trials_type'] = train_trials_type 
-        val_dataset[sess_name]['trials_type']   = val_trials_type
-        test_dataset[sess_name]['trials_type']  = test_trials_type
-
         train_dataset[sess_name]['trials_length'] = train_trials_len
-        val_dataset[sess_name]['trials_length']   = val_trials_len
+        valid_dataset[sess_name]['trials_length'] = valid_trials_len
         test_dataset[sess_name]['trials_length']  = test_trials_len
-    return train_dataset, val_dataset, test_dataset, dataset_info
-
-########### Helper functions ##########
-def _load_onefile(file_path, **data_params):
-    behavior_keys = data_params['behavior_keys']
-    _data = scipy.io.loadmat(file_path)
-    _neuraldata = _data['Ca_trace_byTrial']
-    _behaviors  = {}
-    _trialL     = _data['Behavior_byTrial']['trialL']
-    for key in behavior_keys:
-        _behaviors[key] = _data['Behavior_byTrial'][key]
-
-    num_total_trials = _neuraldata.shape[0]
-    print(f'[INFO] number of total trial: {num_total_trials}')
-
-    neural_data_byTrial = []
-    behavior_data_byTrial = {key: [] for key in behavior_keys} # the concatenated behaviors for filtered trials
-    # if 'speed_class' in behavior_keys:
-    #     behavior_keys.add('speed_class')
-    #     behavior_data_byTrial['speed_class'] = []
-    trial_lengths_data    = []
-    trial_types_data      = []
-
-    for i in range(num_total_trials):
-        x = _neuraldata[i, 0]
-        ys = {key: value[0, 0][i, 0] for key, value in _behaviors.items()} # the behaviors for trial i
-
-        if data_params['min_trial_len'] is not None:
-            if len(x) < data_params['min_trial_len']:
-                continue
-        
-        if data_params['max_trial_len'] is not None:
-            if len(x) > data_params['max_trial_len']:
-                continue
-        
-        neural_data_byTrial.append(x)
-        trial_lengths_data.append(len(x))
-        for key, value in ys.items():
-            behavior_data_byTrial[key].append(ys[key])
-        
-        if _trialL[0, 0][i, 0].all() == 1:
-            trial_types_data.append('right')
-        else:
-            trial_types_data.append('left')
-    num_trials = len(trial_types_data)
-    print(f'[INFO] filtered trial number is {num_trials}')
-
-    results = {
-                'neural_data_byTrial'   : neural_data_byTrial,
-                'behavior_data_byTrial' : behavior_data_byTrial,
-                'trial_lengths_data'    : trial_lengths_data,
-                'trial_types_data'      : trial_types_data,
-                'num_trials'            : len(trial_types_data)
-                }
-    return results
+    return train_dataset, valid_dataset, test_dataset, dataset_info

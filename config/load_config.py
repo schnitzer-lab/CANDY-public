@@ -15,12 +15,8 @@ def load_model_config(args):
 def load_data_config(args):
     with open(args.data_config) as f:
         config = yaml.safe_load(f)
-        data_params = yaml.safe_load(f)
     
     data_config, data_params = (config.get('data_config',{}), config.get('data_params', {}))
-    # Override brain area if provided in command line
-    if args.brain_area:
-        data_config['brain_area'] = args.brain_area.lower()
     if args.data_folder:
         data_config['data_folder'] = args.data_folder
     
@@ -32,8 +28,7 @@ def load_data_config(args):
                 data_config['data_folder'],
                 data_config['path_template'].format(
                     subject=subj['subject'],
-                    date=date,
-                    brain_area=data_config['brain_area']
+                    date=date
                 )
             )
             data_path_lst.append(path)

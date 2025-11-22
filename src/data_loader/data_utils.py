@@ -3,6 +3,47 @@ from sklearn.model_selection import train_test_split
 
 from src.data_loader.normalization import standardize_data, minmaxscale_data
 
+def parse_data_name(file_path):
+    """
+    Parse the data file path to extract animal ID and session ID/date.
+
+    Rules:
+    - Find the substring starting immediately after 'Animal_' and read until the next
+      non English letter or non-alphanumeric character (i.e., stop at anything other
+      than [A-Za-z0-9]). This yields the animal ID (e.g., 'oh21', 'sw24').
+    - Find the substring starting immediately after 'Session_' and read until the next
+      non English letter or non-alphanumeric character. This yields the session ID/date
+      (e.g., '3', '20230423').
+
+    Args:
+        file_path (str): The full path to the data file.
+
+    Returns:
+        tuple[str, str]: (animal_id, session_id_or_date)
+
+    Raises:
+        ValueError: If required tokens ('Animal_' or 'Session_') cannot be found
+                    or if no alphanumeric characters follow them.
+    """
+    import re
+
+    if not isinstance(file_path, str):
+        raise TypeError("file_path must be a string")
+
+    # Compile explicit [A-Za-z0-9]+ to avoid underscores or other symbols
+    animal_match = re.search(r"Animal_([A-Za-z0-9]+)", file_path)
+    session_match = re.search(r"Session_([A-Za-z0-9]+)", file_path)
+
+    if animal_match is None:
+        raise ValueError("'Animal_' token not found or has no following alphanumeric characters in file_path")
+    if session_match is None:
+        raise ValueError("'Session_' token not found or has no following alphanumeric characters in file_path")
+
+    animal_id = animal_match.group(1)
+    session_id = session_match.group(1)
+
+    return animal_id, session_id
+
 def train_val_test_split(num_trials, val_size, test_size, seed):
     """
     Return train, test, validation indices split on [seed]

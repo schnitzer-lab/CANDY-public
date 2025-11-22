@@ -1,18 +1,18 @@
 data_config:
   data_folder: "G:/My Drive/Research"  # Common base path
-  brain_area: "str"  # Default value that can be overridden
+  brain_areas: ["str"]
   subjects:
     - subject: sw26
       dates: [20231104, 20231105, 20231106, 20231107]
     - subject: sw24
       dates: [20231125, 20231123, 20231122, 20231121]
-  path_template: "data/shikano/aim282_nodeconv/{subject}_{date}_ctx-str-cbl-rsc/train-byTrial-{subject}_{date}_{brain_area}.mat"
+  path_template: "data/shikano/aim282_nodeconv/striatum_vel/Animal_{subject}-Session_{date}.pkl"
 
 data_params:
   min_trial_len : 10
   max_trial_len : 150
   seed : 0
-  val_size: 0.1
+  valid_size: 0.1
   test_size: 0.3
   neural_normalizor : minmax
   behavior_normalizor : zscore

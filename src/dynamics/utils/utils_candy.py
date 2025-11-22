@@ -16,7 +16,7 @@ _config.seed = int(torch.randint(low=0, high=100000, size=(1,)))
 ## Dump model related settings
 _config.model = CN() 
 
-# Hidden layer list where each element is the number of neurons for that hidden layer of DFINE encoder/decoder. Please use [20,20,20,20] for nonlinear manifold simulations.
+# Hidden layer list where each element is the number of neurons for that hidden layer of CANDY encoder/decoder. Please use [20,20,20,20] for nonlinear manifold simulations.
 _config.model.hidden_layer_list = [32,32,32] 
 # Activation function used in encoder and decoder layers
 # leakyrelu pretty good: 0.50 (100 epochs); 0.60 (200 epochs); 0.612 (300 epochs); 0.622 (500 epochs)
@@ -46,7 +46,7 @@ _config.model.is_W_trainable = True
 _config.model.is_R_trainable = True
 # Initialization type of LDM parameters, see nn.get_kernel_initializer_function for detailed definition and supported types
 _config.model.ldm_kernel_initializer = 'default'
-# Initialization type of DFINE encoder and decoder parameters, see nn.get_kernel_initializer_function for detailed definition and supported types
+# Initialization type of CANDY encoder and decoder parameters, see nn.get_kernel_initializer_function for detailed definition and supported types
 _config.model.nn_kernel_initializer = 'xavier_normal'
 # Boolean for whether to learn a behavior-supervised model or not. It must be set to True if supervised model will be trained.  
 _config.model.supervise_behv = False
@@ -58,9 +58,9 @@ _config.model.activation_mapper = 'linear'
 _config.model.which_behv_dims = [0, 1]
 # Boolean for whether to decode behavior from a_smooth
 _config.model.behv_from_smooth = False
-# Main save directory for DFINE results, plots and checkpoints
-_config.model.save_dir = 'D:/DATA/DFINE_results'
-# Number of steps to save DFINE checkpoints
+# Main save directory for CANDY results, plots and checkpoints
+_config.model.save_dir = 'D:/DATA/CANDY_results'
+# Number of steps to save CANDY checkpoints
 _config.model.save_steps = 10
 # How to train the dynamics model (None, scale, clip)
 _config.model.stabilize_A = None
@@ -79,7 +79,7 @@ _config.loss = CN()
 
 # L2 regularization loss scale (we recommend a grid-search for the best value, i.e., a grid of [1e-4, 5e-4, 1e-3, 2e-3]). Please use 0 for nonlinear manifold simulations as it leads to a better performance. 
 _config.loss.scale_l2 = 2e-3
-# List of number of steps ahead for which DFINE is optimized. For unsupervised and supervised versions, default values are [1,2,3,4] and [1,2], respectively. 
+# List of number of steps ahead for which CANDY is optimized. For unsupervised and supervised versions, default values are [1,2,3,4] and [1,2], respectively. 
 _config.loss.steps_ahead = [1,2,3,4]
 # If _config.model.supervise_behv is True, scale for MSE of behavior reconstruction (We recommend a grid-search for the best value. It should be set to a large value).
 _config.loss.scale_behv_recons = 20
@@ -89,7 +89,7 @@ _config.train = CN()
 
 # Batch size 
 _config.train.batch_size = 32
-# Number of epochs for which DFINE is trained
+# Number of epochs for which CANDY is trained
 _config.train.num_epochs = 200
 # Number of steps to check validation data performance
 _config.train.valid_step = 1 
@@ -149,7 +149,7 @@ def get_default_config():
 
     Returns: 
     ------------
-    - config: yacs.config.CfgNode, default DFINE config
+    - config: yacs.config.CfgNode, default CANDY config
     '''
 
     return _config.clone()

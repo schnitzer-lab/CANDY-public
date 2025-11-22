@@ -12,8 +12,9 @@ from config.load_config import load_model_config, load_data_config, load_decoder
 def main(args):
     data_config, data_params = load_data_config(args)
     data_path_lst = data_config['data_path_lst']
-    brain_area    = data_config['brain_area']
+    brain_areas    = data_config['brain_areas']
     data_params['train_frac'] = args.train_frac
+    data_params = {**data_config, **data_params}
 
     if 'mouse_wheel' in args.data_config:
         data_type = 'mouse_wheel'
@@ -49,7 +50,7 @@ def main(args):
                     'save_path': save_parent
                     }
     params = {
-        'area': brain_area,
+        'brain_areas': brain_areas,
         'latent_dim' : latent_dim,
         'model_type': model_type,
         'decoder_type': decoder_type,
@@ -92,8 +93,6 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Data processing script.')
-    parser.add_argument('--brain_area', type=str, default=None,
-                       help='Brain areas [mouse wheel] or Task type [monkey] (default: None).')
     parser.add_argument('--data_folder', type=str, default='G:\My Drive\Research',
                         help='Data parent folder (default: G:\My Drive\Research).')
     parser.add_argument('--data_config', type=str, default='./config/data_config/mouse_wheel.yaml',

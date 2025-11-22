@@ -126,8 +126,8 @@ def plot_bar_with_scatter(avg_dict, metrics=["decoder_R2", "unidecoder_R2", "sup
 def _plot_latent(z_hat_pca, trials_length, trials_type, files_names, ax):
     start = 0
     end   = 0
-    if 'left' in trials_type and 'right' in trials_type:
-        color_trial_type_dict = {'left': 'skyblue', 'right': 'pink'}
+    if 'Left' in trials_type and 'Right' in trials_type:
+        color_trial_type_dict = {'Left': 'skyblue', 'Right': 'pink'}
     else: # monkey data
         unique_trial_type = list(set(trials_type))
         color_trial_type_dict = {trial_type: plt.get_cmap('tab10')(i) for i, trial_type in enumerate(unique_trial_type)}

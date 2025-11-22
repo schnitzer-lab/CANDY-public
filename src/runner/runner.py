@@ -34,7 +34,8 @@ def runnerN(data_path_lst, params):
     decoder_train_params = params['decoder_train_params']
     save_params = params['save_params']
     data_type = params['data_type']
-    area = params['area']
+    brain_areas = params['brain_areas']
+    area = "_".join(brain_areas)
 
     model_name = get_model_name(params)
 
